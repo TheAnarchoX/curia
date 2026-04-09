@@ -1,0 +1,37 @@
+target-version = "py312"
+line-length = 120
+
+exclude = [
+    "migrations",
+    ".venv",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".mypy_cache",
+    ".ruff_cache",
+]
+
+[lint]
+select = [
+    "F",    # pyflakes
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "D1",   # pydocstyle — missing docstrings (D1xx series only)
+]
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D104",  # Missing docstring in public package
+]
+
+[lint.isort]
+known-first-party = ["curia"]
+combine-as-imports = true
+
+[lint.pydocstyle]
+convention = "google"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

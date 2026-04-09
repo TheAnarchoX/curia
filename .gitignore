@@ -1,0 +1,75 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Type-checking / linting caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.pytype/
+.pyre/
+
+# Coverage
+htmlcov/
+coverage/
+.coverage
+.coverage.*
+*.cover
+*.lcov
+
+# Environments & secrets
+.env
+.env.local
+.env.*.local
+
+# ===== Node / Next.js =====
+node_modules/
+.next/
+out/
+.turbo/
+.vercel/
+.cache/
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ===== Docker =====
+docker-compose.override.yml
+
+# ===== Misc =====
+*.log
+*.pid
+*.seed
+*.pid.lock
+.terraform/
+*.tfstate
+*.tfstate.*
