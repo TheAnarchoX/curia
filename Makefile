@@ -31,10 +31,10 @@ test:
 # Run services locally
 # ---------------------------------------------------------------------------
 run-api:
-	uv run uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8000 --reload
 
 run-worker:
-	uv run celery -A apps.worker.main worker --loglevel=info
+	uv run celery -A apps.worker.app.celery_app:celery_app worker --loglevel=info
 
 run-web:
 	cd apps/web && npm run dev

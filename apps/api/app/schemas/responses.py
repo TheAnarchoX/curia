@@ -209,7 +209,6 @@ class PromiseResponse(_BaseResponse):
     body: str | None = None
     maker_id: uuid.UUID | None = None
     status: PropositionStatus
-    status: PropositionStatus
     made_date: Date | None = None
     due_date: Date | None = None
     fulfilled_date: Date | None = None
