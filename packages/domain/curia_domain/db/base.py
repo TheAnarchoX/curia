@@ -1,6 +1,7 @@
 """SQLAlchemy declarative base, mixins, and common column helpers."""
 
 from datetime import datetime
+import uuid
 from uuid import uuid4
 
 from sqlalchemy import DateTime, func
@@ -28,7 +29,7 @@ class TimestampMixin:
     )
 
 
-def uuid_pk() -> Mapped[str]:
+def uuid_pk() -> Mapped[uuid.UUID]:
     """Return a UUID primary-key mapped column (PostgreSQL ``uuid`` type)."""
     return mapped_column(
         UUID(as_uuid=True),
