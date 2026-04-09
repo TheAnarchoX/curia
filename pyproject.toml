@@ -9,7 +9,7 @@ authors = [{ name = "Curia Team" }]
 
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.backends"
+build-backend = "hatchling.build"
 
 # ---------------------------------------------------------------------------
 # uv workspace — every package & app is a member
