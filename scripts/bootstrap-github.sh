@@ -4,21 +4,41 @@
 #
 # Usage:
 #   ./scripts/bootstrap-github.sh                     # full bootstrap
-#   ./scripts/bootstrap-github.sh --dry-run            # preview commands
-#   ./scripts/bootstrap-github.sh --milestones-only    # only milestones + labels
-#   ./scripts/bootstrap-github.sh --issues-only        # only backlog issues
+#   ./scripts/bootstrap-github.sh --dry-run           # preview commands
+#   ./scripts/bootstrap-github.sh --milestones-only   # only milestones + labels
+#   ./scripts/bootstrap-github.sh --issues-only       # only backlog issues (+ project sync)
+#   ./scripts/bootstrap-github.sh --no-project        # skip GitHub Project v2 setup
+#
+# Optional env vars:
+#   PROJECT_TITLE="Curia Roadmap"                    # GitHub Project v2 title
+#   PROJECT_PHASE_FIELD="Phase"                      # single-select field used as board columns
 
 set -euo pipefail
 
 DRY_RUN=false
 MILESTONES=true
 ISSUES=true
+PROJECT=true
+PROJECT_TITLE="${PROJECT_TITLE:-Curia Roadmap}"
+PROJECT_PHASE_FIELD="${PROJECT_PHASE_FIELD:-Phase}"
+PROJECT_PHASE_OPTIONS="Backlog,Ready,In Progress,In Review,Done"
+
+REPO="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+OWNER="${REPO%/*}"
+
+declare -a ISSUE_NUMBERS=()
+PROJECT_NUMBER=""
+PROJECT_ID=""
+PHASE_FIELD_ID=""
+BACKLOG_OPTION_ID=""
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run)         DRY_RUN=true ;;
-    --milestones-only) ISSUES=false ;;
+    --milestones-only) ISSUES=false; PROJECT=false ;;
     --issues-only)     MILESTONES=false ;;
+    --no-project)      PROJECT=false ;;
+    --project-only)    MILESTONES=false; ISSUES=false; PROJECT=true ;;
   esac
 done
 
@@ -32,8 +52,74 @@ run() {
 }
 
 echo "=== Curia GitHub Bootstrap ==="
-echo "  DRY_RUN=$DRY_RUN  MILESTONES=$MILESTONES  ISSUES=$ISSUES"
+echo "  REPO=$REPO"
+echo "  DRY_RUN=$DRY_RUN  MILESTONES=$MILESTONES  ISSUES=$ISSUES  PROJECT=$PROJECT"
 echo ""
+
+jq_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf "%s" "$s"
+}
+
+milestone_number_by_title() {
+  local title="$1"
+  local escaped_title
+  escaped_title="$(jq_escape "$title")"
+  {
+    gh api --method GET --paginate "repos/$REPO/milestones?state=open&per_page=100" \
+      --jq ".[] | select(.title==\"$escaped_title\") | .number" 2>/dev/null || true
+    gh api --method GET --paginate "repos/$REPO/milestones?state=closed&per_page=100" \
+      --jq ".[] | select(.title==\"$escaped_title\") | .number" 2>/dev/null || true
+  } | head -n1
+}
+
+ensure_milestone() {
+  local title="$1"
+  local description="$2"
+  local number
+  number="$(milestone_number_by_title "$title")"
+
+  if [[ -n "$number" ]]; then
+    if $DRY_RUN; then
+      echo "[dry-run] gh api --method PATCH repos/$REPO/milestones/$number -f title='$title' -f description='<...>'"
+    else
+      echo "→ Updating milestone: $title"
+      gh api --method PATCH "repos/$REPO/milestones/$number" \
+        -f title="$title" \
+        -f description="$description" >/dev/null
+    fi
+  else
+    if $DRY_RUN; then
+      echo "[dry-run] gh api --method POST repos/$REPO/milestones -f title='$title' -f description='<...>'"
+    else
+      echo "→ Creating milestone: $title"
+      gh api --method POST "repos/$REPO/milestones" \
+        -f title="$title" \
+        -f description="$description" >/dev/null
+    fi
+  fi
+}
+
+ensure_label() {
+  local name="$1"
+  local color="$2"
+  local description="${3:-}"
+  if [[ -n "$description" ]]; then
+    run gh label create "$name" --color "$color" --description "$description" --force
+  else
+    run gh label create "$name" --color "$color" --force
+  fi
+}
+
+issue_number_by_title() {
+  local title="$1"
+  local escaped_title
+  escaped_title="$(jq_escape "$title")"
+  gh api --method GET --paginate "repos/$REPO/issues?state=all&per_page=100" \
+    --jq ".[] | select(.pull_request|not) | select(.title==\"$escaped_title\") | .number" 2>/dev/null | head -n1 || true
+}
 
 # ====================================================================
 # MILESTONES & LABELS
@@ -41,39 +127,39 @@ echo ""
 if $MILESTONES; then
 
 echo "--- Creating Milestones ---"
-run gh milestone create "M2: iBabs Live Integration" \
-  --description "Prove end-to-end pipeline with municipal council data" 2>/dev/null || true
-run gh milestone create "M3: Tweede Kamer Integration" \
-  --description "Connect to national parliament OData API — richest Dutch political data source" 2>/dev/null || true
-run gh milestone create "M4: API & Frontend MVP" \
-  --description "Functional REST API and basic web dashboard with real data" 2>/dev/null || true
-run gh milestone create "M5: Additional Data Sources" \
-  --description "OpenRaadsinformatie, Kiesraad elections, Eerste Kamer, Woogle/WOO" 2>/dev/null || true
-run gh milestone create "M6: Analytics & Promise Tracking" \
-  --description "Derive insights from political data at all levels" 2>/dev/null || true
-run gh milestone create "M7: Public Dashboard & Platform" \
-  --description "Polished public-facing product for citizens, journalists, researchers" 2>/dev/null || true
+ensure_milestone "M2: iBabs Live Integration" \
+  "Prove end-to-end pipeline with municipal council data"
+ensure_milestone "M3: Tweede Kamer Integration" \
+  "Connect to national parliament OData API - richest Dutch political data source"
+ensure_milestone "M4: API & Frontend MVP" \
+  "Functional REST API and basic web dashboard with real data"
+ensure_milestone "M5: Additional Data Sources" \
+  "OpenRaadsinformatie, Kiesraad elections, Eerste Kamer, Woogle/WOO"
+ensure_milestone "M6: Analytics & Promise Tracking" \
+  "Derive insights from political data at all levels"
+ensure_milestone "M7: Public Dashboard & Platform" \
+  "Polished public-facing product for citizens, journalists, researchers"
 echo ""
 
 echo "--- Creating Labels ---"
 for layer in connectors ingestion domain api worker web infra; do
-  run gh label create "layer:${layer}" --color "1d76db" --force 2>/dev/null || true
+  ensure_label "layer:${layer}" "1d76db" "Work touching the ${layer} layer"
 done
-run gh label create "size:small" --color "0e8a16" --force 2>/dev/null || true
-run gh label create "size:medium" --color "fbca04" --force 2>/dev/null || true
-run gh label create "size:large" --color "d93f0b" --force 2>/dev/null || true
-run gh label create "agent:excellent" --color "7057ff" --description "Clear scope, well-defined patterns" --force 2>/dev/null || true
-run gh label create "agent:good" --color "7057ff" --description "Mostly automatable, may need review" --force 2>/dev/null || true
-run gh label create "agent:mixed" --color "7057ff" --description "Needs human judgment + agent execution" --force 2>/dev/null || true
-run gh label create "agent:human-only" --color "7057ff" --description "Requires domain expertise" --force 2>/dev/null || true
-run gh label create "task" --color "0075ca" --force 2>/dev/null || true
-run gh label create "documentation" --color "0075ca" --force 2>/dev/null || true
-run gh label create "source:ibabs" --color "c5def5" --force 2>/dev/null || true
-run gh label create "source:tweedekamer" --color "c5def5" --force 2>/dev/null || true
-run gh label create "source:openraadsinformatie" --color "c5def5" --force 2>/dev/null || true
-run gh label create "source:kiesraad" --color "c5def5" --force 2>/dev/null || true
-run gh label create "source:eerstekamer" --color "c5def5" --force 2>/dev/null || true
-run gh label create "source:woogle" --color "c5def5" --force 2>/dev/null || true
+ensure_label "size:small" "0e8a16" "Small scoped task"
+ensure_label "size:medium" "fbca04" "Medium scoped task"
+ensure_label "size:large" "d93f0b" "Large scoped task"
+ensure_label "agent:excellent" "7057ff" "Clear scope, well-defined patterns"
+ensure_label "agent:good" "7057ff" "Mostly automatable, may need review"
+ensure_label "agent:mixed" "7057ff" "Needs human judgment + agent execution"
+ensure_label "agent:human-only" "7057ff" "Requires domain expertise"
+ensure_label "task" "0075ca" "General implementation task"
+ensure_label "documentation" "0075ca" "Documentation updates"
+ensure_label "source:ibabs" "c5def5" "Issue for iBabs source"
+ensure_label "source:tweedekamer" "c5def5" "Issue for Tweede Kamer source"
+ensure_label "source:openraadsinformatie" "c5def5" "Issue for OpenRaadsinformatie source"
+ensure_label "source:kiesraad" "c5def5" "Issue for Kiesraad source"
+ensure_label "source:eerstekamer" "c5def5" "Issue for Eerste Kamer source"
+ensure_label "source:woogle" "c5def5" "Issue for Woogle/WOO source"
 echo ""
 
 fi # MILESTONES
@@ -87,20 +173,151 @@ if $ISSUES; then
 echo "--- Creating Backlog Issues ---"
 echo ""
 
-# Helper: create an issue, swallowing duplicates
+# Helper: create an issue without duplicates (idempotent by exact title)
 issue() {
   local title="$1" milestone="$2" labels="$3"
   shift 3
   local body="$*"
+  local existing_number
+  existing_number="$(issue_number_by_title "$title")"
+
+  if [[ -n "$existing_number" ]]; then
+    echo "→ Exists: #$existing_number $title"
+    ISSUE_NUMBERS+=("$existing_number")
+    return 0
+  fi
+
   if $DRY_RUN; then
     echo "[dry-run] gh issue create --title '$title' --milestone '$milestone' --label '$labels'"
   else
     echo "→ Creating: $title"
-    gh issue create \
+    local created_url
+    created_url="$(gh issue create \
       --title "$title" \
       --milestone "$milestone" \
       --label "$labels" \
-      --body "$body" 2>/dev/null || echo "  (may already exist)"
+      --body "$body")"
+    ISSUE_NUMBERS+=("${created_url##*/}")
+  fi
+}
+
+project_enabled() {
+  if ! $PROJECT; then
+    return 1
+  fi
+
+  if $DRY_RUN; then
+    return 0
+  fi
+
+  if gh project list --owner "$OWNER" --format json >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "! Skipping project setup: current gh token cannot access GitHub Projects."
+  echo "! Run: gh auth refresh -s project"
+  PROJECT=false
+  return 1
+}
+
+project_number_by_title() {
+  local title="$1"
+  local escaped_title
+  escaped_title="$(jq_escape "$title")"
+  gh project list --owner "$OWNER" --format json \
+    --jq "(.projects // .)[]? | select(.title==\"$escaped_title\") | .number" 2>/dev/null | head -n1 || true
+}
+
+ensure_project() {
+  if ! project_enabled; then
+    return 1
+  fi
+
+  if $DRY_RUN; then
+    echo "[dry-run] ensure project '$PROJECT_TITLE' for owner '$OWNER'"
+    return 0
+  fi
+
+  PROJECT_NUMBER="$(project_number_by_title "$PROJECT_TITLE")"
+  if [[ -z "$PROJECT_NUMBER" ]]; then
+    echo "→ Creating project: $PROJECT_TITLE"
+    PROJECT_NUMBER="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.number')"
+  else
+    echo "→ Reusing project #$PROJECT_NUMBER: $PROJECT_TITLE"
+  fi
+
+  PROJECT_ID="$(gh project view "$PROJECT_NUMBER" --owner "$OWNER" --format json --jq '.id')"
+}
+
+ensure_project_phase_field() {
+  if ! $PROJECT; then
+    return 1
+  fi
+
+  if $DRY_RUN; then
+    echo "[dry-run] ensure single-select field '$PROJECT_PHASE_FIELD' with options: $PROJECT_PHASE_OPTIONS"
+    return 0
+  fi
+
+  local escaped_field
+  escaped_field="$(jq_escape "$PROJECT_PHASE_FIELD")"
+
+  PHASE_FIELD_ID="$(gh project field-list "$PROJECT_NUMBER" --owner "$OWNER" --format json \
+    --jq "(.fields // .)[]? | select(.name==\"$escaped_field\") | .id" | head -n1 || true)"
+
+  if [[ -z "$PHASE_FIELD_ID" ]]; then
+    echo "→ Creating project field: $PROJECT_PHASE_FIELD"
+    PHASE_FIELD_ID="$(gh project field-create "$PROJECT_NUMBER" \
+      --owner "$OWNER" \
+      --name "$PROJECT_PHASE_FIELD" \
+      --data-type SINGLE_SELECT \
+      --single-select-options "$PROJECT_PHASE_OPTIONS" \
+      --format json \
+      --jq '.id')"
+  else
+    echo "→ Reusing project field: $PROJECT_PHASE_FIELD"
+  fi
+
+  BACKLOG_OPTION_ID="$(gh project field-list "$PROJECT_NUMBER" --owner "$OWNER" --format json \
+    --jq "(.fields // .)[]? | select(.name==\"$escaped_field\") | .options[]? | select(.name==\"Backlog\") | .id" | head -n1 || true)"
+
+  if [[ -z "$BACKLOG_OPTION_ID" ]]; then
+    echo "! Could not find 'Backlog' option in field '$PROJECT_PHASE_FIELD'; items will be added without phase assignment."
+  fi
+}
+
+add_issue_to_project() {
+  local issue_number="$1"
+  local issue_url="https://github.com/$REPO/issues/$issue_number"
+
+  if ! $PROJECT; then
+    return 0
+  fi
+
+  if $DRY_RUN; then
+    echo "[dry-run] gh project item-add $PROJECT_NUMBER --owner '$OWNER' --url '$issue_url'"
+    return 0
+  fi
+
+  local item_id
+  item_id="$(gh project item-add "$PROJECT_NUMBER" --owner "$OWNER" --url "$issue_url" --format json --jq '.id' 2>/dev/null || true)"
+
+  if [[ -z "$item_id" ]]; then
+    item_id="$(gh project item-list "$PROJECT_NUMBER" --owner "$OWNER" --limit 1000 --format json \
+      --jq "(.items // .)[]? | select(.content.url==\"$issue_url\") | .id" | head -n1 || true)"
+  fi
+
+  if [[ -z "$item_id" ]]; then
+    echo "! Could not add or locate issue #$issue_number in project."
+    return 0
+  fi
+
+  if [[ -n "$PHASE_FIELD_ID" && -n "$BACKLOG_OPTION_ID" ]]; then
+    gh project item-edit \
+      --id "$item_id" \
+      --project-id "$PROJECT_ID" \
+      --field-id "$PHASE_FIELD_ID" \
+      --single-select-option-id "$BACKLOG_OPTION_ID" >/dev/null 2>&1 || true
   fi
 }
 
@@ -806,12 +1023,32 @@ echo "=== Backlog Created ==="
 
 fi # ISSUES
 
+if $PROJECT; then
+  echo ""
+  echo "--- Ensuring GitHub Project board ---"
+  ensure_project || true
+
+  if [[ -n "$PROJECT_NUMBER" || "$DRY_RUN" == "true" ]]; then
+    ensure_project_phase_field || true
+
+    if [[ "${#ISSUE_NUMBERS[@]}" -gt 0 ]]; then
+      echo "→ Syncing ${#ISSUE_NUMBERS[@]} issues into project..."
+      for n in "${ISSUE_NUMBERS[@]}"; do
+        add_issue_to_project "$n"
+      done
+    else
+      echo "→ No issues collected in this run; skipping project item sync."
+    fi
+  fi
+fi
+
 echo ""
 echo "=== Bootstrap Complete ==="
 echo ""
-echo "Next steps:"
-echo "  1. Create a GitHub Project (v2): https://github.com/TheAnarchoX/Curia/projects"
-echo "  2. Add columns: Backlog → Ready → In Progress → In Review → Done"
-echo "  3. Add the created issues to the project board"
-echo "  4. Prioritise: M2 (iBabs) and M3 (Tweede Kamer) are the immediate focus"
-echo "  5. See docs/project-management/agentic-workflow.md for workflow guide"
+echo "Result summary:"
+echo "  - Milestones and labels are upserted (safe to run repeatedly)"
+echo "  - Issues are created only when exact title does not already exist"
+echo "  - Project board is created/reused and issues are linked without duplicates"
+echo ""
+echo "Recommended next focus: M2 (iBabs) and M3 (Tweede Kamer)"
+echo "Workflow guide: docs/project-management/agentic-workflow.md"
