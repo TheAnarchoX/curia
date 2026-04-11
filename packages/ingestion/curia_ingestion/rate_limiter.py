@@ -19,6 +19,10 @@ class RateLimiter:
 
     def __init__(self, rate: float = 2.0, burst: int = 5) -> None:
         """Initialize the rate limiter with a sustained rate and burst size."""
+        if rate <= 0:
+            raise ValueError("rate must be greater than 0")
+        if burst <= 0:
+            raise ValueError("burst must be greater than 0")
         self._rate = rate
         self._burst = burst
         self._tokens = float(burst)

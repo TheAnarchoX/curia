@@ -12,4 +12,4 @@ class WorkerSettings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     log_level: str = "info"
 
-    model_config = {"env_file": ".env", "env_prefix": "CURIA_"}
+    model_config = {"env_file": ".env"}

@@ -46,7 +46,7 @@ db-up:
 	docker compose up -d postgres redis
 
 db-down:
-	docker compose down postgres redis
+	docker compose stop postgres redis
 
 migrate:
 	uv run alembic upgrade head

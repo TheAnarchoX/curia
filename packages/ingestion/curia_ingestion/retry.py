@@ -22,6 +22,13 @@ class RetryPolicy:
     backoff_factor: float = 0.5
     retryable_status_codes: frozenset[int] = field(default_factory=lambda: _DEFAULT_RETRYABLE_STATUS_CODES)
 
+    def __post_init__(self) -> None:
+        """Validate retry policy values."""
+        if self.max_retries < 1:
+            raise ValueError("max_retries must be at least 1")
+        if self.backoff_factor < 0:
+            raise ValueError("backoff_factor must be non-negative")
+
 
 class RetryableError(Exception):
     """Raised when a retryable failure occurs (e.g. transient HTTP status)."""
@@ -59,4 +66,6 @@ async def retry_with_policy(
             await asyncio.sleep(delay)
         except Exception:
             raise  # non-retryable → propagate immediately
-    raise last_exc  # type: ignore[misc]
+    if last_exc is None:
+        raise RuntimeError("retry_with_policy exhausted without capturing an exception")
+    raise last_exc

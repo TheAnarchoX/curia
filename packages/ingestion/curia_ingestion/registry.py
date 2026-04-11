@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,34 +13,50 @@ logger = logging.getLogger(__name__)
 
 
 class SourceRegistry:
-    """Registry that maps source_type strings to SourceConnector classes."""
+    """Registry that maps source_type strings to connector factories."""
 
     def __init__(self) -> None:
         """Initialize an empty connector registry."""
-        self._connectors: dict[str, type[SourceConnector]] = {}
+        self._connectors: dict[str, Callable[[], SourceConnector]] = {}
 
-    def register(self, connector_class: type[SourceConnector]) -> type[SourceConnector]:
-        """Register a connector class. Can also be used as a decorator."""
+    def register(
+        self,
+        connector: SourceConnector | Callable[[], SourceConnector],
+    ) -> SourceConnector | Callable[[], SourceConnector]:
+        """Register a connector instance or factory. Can also be used as a decorator."""
         from curia_ingestion.interfaces import SourceConnector as _SC
 
-        if not (isinstance(connector_class, type) and issubclass(connector_class, _SC)):
-            raise TypeError(f"{connector_class!r} is not a SourceConnector subclass")
+        if isinstance(connector, _SC):
+            instance = connector
 
-        meta = connector_class.get_meta(connector_class)  # type: ignore[arg-type]
+            def factory() -> SourceConnector:
+                return instance
+
+            connector_name = connector.__class__.__name__
+        elif callable(connector):
+            factory = connector
+            instance = factory()
+            connector_name = getattr(connector, "__name__", connector.__class__.__name__)
+            if not isinstance(instance, _SC):
+                raise TypeError(f"{connector!r} did not produce a SourceConnector instance")
+        else:
+            raise TypeError(f"{connector!r} is not a SourceConnector instance or factory")
+
+        meta = instance.get_meta()
         source_type = meta.source_type
         if source_type in self._connectors:
             logger.warning(
                 "Overwriting connector for source_type=%s (old=%s, new=%s)",
                 source_type,
-                self._connectors[source_type].__name__,
-                connector_class.__name__,
+                getattr(self._connectors[source_type], "__name__", self._connectors[source_type].__class__.__name__),
+                connector_name,
             )
-        self._connectors[source_type] = connector_class
-        logger.info("Registered connector %s for source_type=%s", connector_class.__name__, source_type)
-        return connector_class
+        self._connectors[source_type] = factory
+        logger.info("Registered connector %s for source_type=%s", connector_name, source_type)
+        return connector
 
-    def get(self, source_type: str) -> type[SourceConnector]:
-        """Return the connector class registered for *source_type*."""
+    def get(self, source_type: str) -> Callable[[], SourceConnector]:
+        """Return the connector factory registered for *source_type*."""
         try:
             return self._connectors[source_type]
         except KeyError:
