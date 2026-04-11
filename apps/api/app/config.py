@@ -29,7 +29,8 @@ class Settings(BaseSettings):
             text = value.strip()
             if not text:
                 return []
-            if text.startswith("["):
+            try:
                 return json.loads(text)
-            return [item.strip() for item in text.split(",") if item.strip()]
+            except json.JSONDecodeError:
+                return [item.strip() for item in text.split(",") if item.strip()]
         return value

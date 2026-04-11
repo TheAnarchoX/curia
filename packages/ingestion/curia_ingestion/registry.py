@@ -19,11 +19,20 @@ class SourceRegistry:
         """Initialize an empty connector registry."""
         self._connectors: dict[str, Callable[[], SourceConnector]] = {}
 
+    @staticmethod
+    def _get_connector_name(connector: object) -> str:
+        """Return a readable name for a connector instance or factory."""
+        return getattr(connector, "__name__", connector.__class__.__name__)
+
     def register(
         self,
         connector: SourceConnector | Callable[[], SourceConnector],
     ) -> SourceConnector | Callable[[], SourceConnector]:
-        """Register a connector instance or factory. Can also be used as a decorator."""
+        """Register a connector instance or factory.
+
+        Factory callables are invoked once at registration time so the registry
+        can read connector metadata and determine the ``source_type`` key.
+        """
         from curia_ingestion.interfaces import SourceConnector as _SC
 
         if isinstance(connector, _SC):
@@ -32,11 +41,11 @@ class SourceRegistry:
             def factory() -> SourceConnector:
                 return instance
 
-            connector_name = connector.__class__.__name__
+            connector_name = self._get_connector_name(connector)
         elif callable(connector):
             factory = connector
             instance = factory()
-            connector_name = getattr(connector, "__name__", connector.__class__.__name__)
+            connector_name = self._get_connector_name(connector)
             if not isinstance(instance, _SC):
                 raise TypeError(f"{connector!r} did not produce a SourceConnector instance")
         else:
@@ -48,7 +57,7 @@ class SourceRegistry:
             logger.warning(
                 "Overwriting connector for source_type=%s (old=%s, new=%s)",
                 source_type,
-                getattr(self._connectors[source_type], "__name__", self._connectors[source_type].__class__.__name__),
+                self._get_connector_name(self._connectors[source_type]),
                 connector_name,
             )
         self._connectors[source_type] = factory
