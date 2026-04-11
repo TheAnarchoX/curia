@@ -7,16 +7,27 @@
 ## 1. Product Vision
 
 Curia aims to be the **open-source political intelligence platform for the
-Netherlands**, starting at the municipal level. Dutch municipal councils publish
-meeting agendas, votes, motions, and documents through various portals, but the
-data is fragmented, unstandardised, and difficult to analyse at scale.
+Netherlands**, covering **all levels of Dutch politics** — from national
+parliament down to municipal councils. Dutch political data is fragmented across
+dozens of portals, APIs, and document repositories. Bills debated in the Tweede
+Kamer, motions voted on in municipal councils, election results from the
+Kiesraad, and government documents released under WOO (Freedom of Information)
+all live in separate silos with incompatible formats.
 
 Curia collects that data, normalises it into a unified domain model, and makes
-it available through a developer-friendly API and a public web interface. The
-long-term goal is to make local politics as transparent and accessible as
-national politics — enabling journalists, researchers, watchdog organisations,
-and engaged citizens to track what their representatives say, promise, and vote
-on.
+it available through a developer-friendly API and a public web interface.
+
+**National politics is the primary long-term goal.** The Tweede Kamer (House of
+Representatives) publishes the richest open data in Dutch politics — bills,
+motions, amendments, votes, debates, and committee reports — via an official
+OData API under a CC-0 license. The project starts with **municipal council
+data** (iBabs) because scraping-based connectors provide an accessible
+proof-of-concept for the pluggable architecture, but the roadmap prioritises
+national parliament as the next and most impactful source.
+
+The vision is to enable journalists, researchers, watchdog organisations, and
+engaged citizens to track what representatives at every level say, promise, and
+vote on — making Dutch politics as a whole more transparent and accessible.
 
 ---
 
@@ -25,7 +36,8 @@ on.
 ### Phase 1 — Municipal Council Data (current)
 
 Ingest data from **iBabs**, the portal software used by hundreds of Dutch
-municipalities. Target entities:
+municipalities. This phase proves the connector architecture and end-to-end
+pipeline. Target entities:
 
 - Institutions and governing bodies
 - Politicians and party memberships
@@ -36,25 +48,54 @@ municipalities. Target entities:
 
 Deliver a REST API and foundational web interface.
 
-### Phase 2 — Additional Sources
+### Phase 2 — National Parliament (Tweede Kamer)
 
-Expand the connector library:
+Integrate the **Tweede Kamer OData API** — the biggest and richest open data
+source in Dutch politics (`https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/`).
+CC-0 licensed, no authentication required. Target entities:
 
-- **OpenRaadsinformatie** (ORI) — open data aggregator for municipal councils
-- **Tweede Kamer Open Data** — Dutch House of Representatives
-- **Debat Direct** — Parliamentary debate transcripts
-- **Eerste Kamer** — Senate data
-- **News feeds** — press releases and local news
+- Kamerleden (MPs) and fracties (parliamentary groups)
+- Wetsvoorstellen (bills), moties (motions), amendementen (amendments)
+- Stemmingen (votes) — both plenary and committee
+- Kamervragen (parliamentary questions) and answers
+- Commissievergaderingen (committee meetings) and reports
+- Debate transcripts (Handelingen)
+- Documents and attachments
 
-### Phase 3 — Analytics & Public Dashboard
+### Phase 3 — Additional Sources
+
+Expand the connector library to cover the full breadth of Dutch political data:
+
+- **Eerste Kamer** (Senate) — scraping from eerstekamer.nl
+- **Kiesraad** — official election results (all elections since 2010, EML format)
+- **OpenRaadsinformatie** (ORI) — ElasticSearch API indexing 300+ municipalities,
+  provinces, and water boards
+- **Woogle / WOO** — 8M+ government documents under the Dutch Freedom of
+  Information Act
+- **Officiële Bekendmakingen** — official government publications (laws,
+  regulations, royal decrees)
+- **data.overheid.nl** — central Dutch government open data portal (CKAN-based)
+
+### Phase 4 — Analytics & Cross-Source Intelligence
 
 Build higher-order features on top of the normalised data:
 
 - Voting pattern analysis and coalition detection
+- Cross-source entity resolution (link the same politician across sources)
 - Promise tracking (link promises to votes and outcomes)
 - Attendance and activity metrics
-- Trend detection across municipalities
-- Public-facing dashboard with search, filters, and visualisations
+- Trend detection across municipalities and parliament
+- Legislative tracking (bill lifecycle from introduction to law)
+
+### Phase 5 — Public Dashboard & Data Export
+
+Launch the public-facing interface and ecosystem tools:
+
+- Public dashboard with search, filters, and visualisations
+- Municipality and parliament comparison views
+- Embeddable widgets for media and civic organisations
+- Bulk data export (CSV, JSON, Parquet)
+- API rate limiting and usage analytics
 
 ---
 
@@ -65,13 +106,15 @@ Build higher-order features on top of the normalised data:
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                      Data Sources                         │
-│   iBabs portals · ORI · Tweede Kamer · News · ...        │
+│   Tweede Kamer OData · Eerste Kamer · OpenRaadsinformatie │
+│   Kiesraad · Woogle/WOO · iBabs · data.overheid.nl · …   │
 └──────────────────────────┬────────────────────────────────┘
                            │
 ┌──────────────────────────▼────────────────────────────────┐
 │                      Connectors                           │
-│   packages/connectors/ibabs   (+ future connectors)       │
-│   Responsibility: source-specific crawling & HTML parsing │
+│   packages/connectors/{ibabs,tweedekamer,ori,…}           │
+│   Responsibility: source-specific crawling, API queries,  │
+│   HTML parsing, OData consumption                         │
 └──────────────────────────┬────────────────────────────────┘
                            │
 ┌──────────────────────────▼────────────────────────────────┐
@@ -107,7 +150,7 @@ Build higher-order features on top of the normalised data:
 
 | Layer | Package | Responsibility |
 |-------|---------|----------------|
-| **Connectors** | `packages/connectors/*` | Source-specific logic: URL discovery, HTML/API parsing, mapping raw data to intermediate models |
+| **Connectors** | `packages/connectors/*` | Source-specific logic: URL discovery, OData/API queries, HTML parsing, mapping raw data to intermediate models |
 | **Ingestion** | `packages/ingestion` | Source-agnostic crawling framework: async HTTP client, rate limiter, retry policies, `SourceConnector` interface |
 | **Domain** | `packages/domain` | Canonical data model (Pydantic v2), SQLAlchemy 2.x ORM, DB session helpers, data lineage & assertion tracking |
 | **API** | `apps/api` | REST interface: CRUD endpoints, search, pagination, response schemas, CORS, auth (future) |
@@ -117,10 +160,10 @@ Build higher-order features on top of the normalised data:
 ### Data Flow
 
 ```
-1. Worker schedules a crawl task for a source (e.g. iBabs portal X).
-2. Connector discovers seed URLs via the SourceConnector interface.
-3. Ingestion client fetches pages with rate limiting and retries.
-4. Connector parsers extract structured data from HTML.
+1. Worker schedules a crawl task for a source (e.g. iBabs portal X, Tweede Kamer API).
+2. Connector discovers seed URLs or API endpoints via the SourceConnector interface.
+3. Ingestion client fetches pages/API responses with rate limiting and retries.
+4. Connector parsers extract structured data from HTML or API payloads (OData, JSON, XML).
 5. Mapper converts connector models → domain value objects.
 6. Worker writes domain objects to PostgreSQL via the ORM.
 7. Worker runs normalisation & identity resolution passes.
@@ -130,13 +173,28 @@ Build higher-order features on top of the normalised data:
 
 ---
 
-## 4. Domain Model
+## 4. Data Sources
+
+| Source | Level | Access Method | URL | Data Types | License / Auth |
+|--------|-------|---------------|-----|------------|----------------|
+| **Tweede Kamer** | National | OData v4 API | `https://gegevensmagazijn.tweedekamer.nl/OData/v4/2.0/` | Bills, motions, amendments, votes, debates, committee reports, MP profiles | CC-0, no auth |
+| **Eerste Kamer** | National | Web scraping | `https://www.eerstekamer.nl/` | Bills, votes, senator profiles, committee activities | No official API |
+| **OpenRaadsinformatie** | Municipal / Provincial / Water boards | ElasticSearch API | `https://api.openraadsinformatie.nl/` | Meetings, motions, votes, documents for 300+ bodies | Open source ([GitHub](https://github.com/openstate/open-raadsinformatie)) |
+| **Kiesraad** | All levels | File download (EML/XML) | `https://data.overheid.nl/` (search "verkiezingsuitslagen") | Official election results (all elections since 2010) | Open data; Python parser on [GitHub](https://github.com/kiesraad) |
+| **Woogle / WOO** | National / Municipal | Search API | `https://woogle.wooverheid.nl/` | 8M+ government documents under Freedom of Information Act | Open access |
+| **Officiële Bekendmakingen** | National | Web / API | `https://www.officielebekendmakingen.nl/` | Laws, regulations, royal decrees, parliamentary papers | Public |
+| **data.overheid.nl** | All levels | REST API (CKAN) | `https://data.overheid.nl/` | Central open data portal — datasets from all government layers | Open data |
+| **iBabs** | Municipal | Web scraping | Per-municipality portals | Meeting agendas, motions, votes, documents, members | No API; HTML scraping |
+
+---
+
+## 5. Domain Model
 
 ### Entity Map
 
 ```
 Institution ──────< GoverningBody
-     │
+     │                    (e.g. Tweede Kamer, Gemeenteraad, Commissie)
      └──< Meeting ──────< AgendaItem ──────< DebateSegment
               │                │
               │                ├──< Motion ──────< Amendment
@@ -152,39 +210,50 @@ Party ──────< Politician (via Mandate)
                   ├──< Promise
                   └──< Metric
 
+Bill ──────< BillStage
+  │              └──< Vote
+  └──< Amendment
+  └──< Document
+
+Election ──────< ElectionResult
+
 Source ──────< SourceRecord ──────< ExtractionRun ──────< Assertion ──< Evidence
 
 IdentityCandidate ──< IdentityReview
 
-Topic (tagging across motions, questions, promises)
+Topic (tagging across motions, questions, promises, bills)
 ```
 
 ### Key Entities
 
 | Entity | Description |
 |--------|-------------|
-| **Institution** | A municipality or political body (e.g. "Gemeente Amsterdam") |
-| **GoverningBody** | Sub-body of an institution (e.g. "Gemeenteraad", "College van B&W") |
-| **Party** | Political party with optional national affiliation |
-| **Politician** | Individual elected official; linked to parties via time-bounded Mandates |
-| **Meeting** | A scheduled or completed council meeting |
+| **Institution** | A political body at any level (e.g. "Tweede Kamer", "Gemeente Amsterdam", "Provincie Noord-Holland") |
+| **GoverningBody** | Sub-body of an institution (e.g. "Gemeenteraad", "Vaste Commissie Financiën", "College van B&W") |
+| **Party** | Political party; tracks both national party identity and local lists |
+| **Politician** | Individual elected official or representative (Kamerlid, raadslid, senator); linked to parties via time-bounded Mandates |
+| **Meeting** | A scheduled or completed meeting (plenary session, committee hearing, council meeting) |
 | **AgendaItem** | An item on a meeting's agenda |
 | **DebateSegment** | A segment of debate within an agenda item |
-| **Motion** | A formal proposal put to a vote |
-| **Amendment** | A proposed change to a motion |
-| **Vote** | A single politician's vote on a motion (for / against / abstain) |
+| **Motion** | A formal proposal put to a vote (motie) |
+| **Amendment** | A proposed change to a motion or bill (amendement) |
+| **Vote** | A single politician's vote on a motion or bill (for / against / abstain) |
 | **Decision** | The outcome of a vote or deliberation |
-| **Question** | A written question from a politician to the executive |
-| **Promise** | A political promise extracted from speeches or manifestos |
-| **Document** | An attached document (PDF, agenda, report) |
-| **Topic** | A tag / category used to classify motions, questions, and promises |
+| **Bill** | A legislative proposal (wetsvoorstel) — tracks lifecycle from introduction through committee to final vote |
+| **BillStage** | A stage in the legislative lifecycle of a bill (e.g. introduced, committee, plenary, adopted, rejected) |
+| **Question** | A written or oral question from a politician to the executive (Kamervraag, schriftelijke vraag) |
+| **Promise** | A political promise extracted from speeches, manifestos, or coalition agreements |
+| **Document** | An attached document (PDF, agenda, report, Memorie van Toelichting) |
+| **Election** | An election event (Tweede Kamer, Provinciale Staten, gemeenteraad, waterschap) |
+| **ElectionResult** | Results of an election per party/candidate per region |
+| **Topic** | A tag / category used to classify motions, questions, promises, and bills |
 | **Metric** | A computed analytical measure (e.g. attendance rate, voting loyalty) |
-| **Source** | An external data source (e.g. a specific iBabs portal) |
+| **Source** | An external data source (e.g. a specific iBabs portal, Tweede Kamer OData API) |
 | **SourceRecord** | A raw record fetched from a source |
 | **ExtractionRun** | A processing run that produces assertions from source records |
 | **Assertion** | A claimed fact derived from a source, with confidence score |
 | **Evidence** | Supporting evidence linking an assertion to its source record |
-| **IdentityCandidate** | A potential entity match for deduplication |
+| **IdentityCandidate** | A potential entity match for cross-source deduplication |
 | **IdentityReview** | Human or automated review of an identity candidate |
 
 All entities use **UUID primary keys** and carry `created_at` / `updated_at`
@@ -192,7 +261,7 @@ timestamps.
 
 ---
 
-## 5. Technical Stack
+## 6. Technical Stack
 
 | Component | Technology | Notes |
 |-----------|------------|-------|
@@ -204,7 +273,8 @@ timestamps.
 | Database | PostgreSQL 15 | JSONB, arrays, full-text search |
 | Cache / Queue | Redis 7 | Celery broker, future caching |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS | App Router |
-| HTML parsing | BeautifulSoup 4 + lxml | Connector parsers |
+| HTML parsing | BeautifulSoup 4 + lxml | Connector parsers (scraping-based sources) |
+| OData client | TBD (e.g. pyodata or raw httpx) | Tweede Kamer API connector |
 | HTTP client | httpx | Async with retry & rate limiting |
 | Migrations | Alembic | Async-aware, autogenerate support |
 | Package management | uv (workspace) | Fast, lockfile-based |
@@ -216,14 +286,15 @@ timestamps.
 
 ---
 
-## 6. Operating Principles
+## 7. Operating Principles
 
 ### Open Source, Dutch-First
 
-Curia is MIT-licensed and community-driven. The initial focus is the Dutch
-political landscape, but the domain model and connector architecture are
-designed to be **internationalisation-ready** — the same patterns apply to any
-parliamentary system.
+Curia is MIT-licensed and community-driven. The focus is the **entire Dutch
+political landscape** — from national parliament to municipal councils. The
+domain model and connector architecture are designed to be
+**internationalisation-ready** — the same patterns apply to any parliamentary
+system.
 
 ### Agent-Friendly Development
 
@@ -254,7 +325,7 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 
 ---
 
-## 7. Roadmap
+## 8. Roadmap
 
 ### M1 — Foundation ✅
 
@@ -272,7 +343,7 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 
 ### M2 — iBabs Integration
 
-> Live crawling and parsing of iBabs municipal portals.
+> Live crawling and parsing of iBabs municipal portals (Phase 1 proof-of-concept).
 
 - [ ] iBabs connector: full crawl of meeting lists, details, documents
 - [ ] Parser coverage: all major page types (meetings, members, parties, votes)
@@ -292,25 +363,47 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 - [ ] Web: search interface with faceted filters
 - [ ] API documentation and interactive explorer
 
-### M4 — Analytics + Promise Tracking
+### M4 — Tweede Kamer Integration
 
-> Higher-order intelligence on top of the raw data.
+> National parliament data via the OData API (Phase 2).
+
+- [ ] Tweede Kamer OData connector: bills, motions, amendments, votes
+- [ ] MP profiles, party/fractie data, committee memberships
+- [ ] Parliamentary questions and answers
+- [ ] Debate transcripts (Handelingen)
+- [ ] Bill lifecycle tracking (introduction → committee → plenary → decision)
+- [ ] Domain model extensions for national-level entities (Bill, BillStage)
+- [ ] Cross-level entity resolution (national parties ↔ local lists)
+
+### M5 — Additional Sources
+
+> Expand beyond iBabs and Tweede Kamer (Phase 3).
+
+- [ ] Eerste Kamer connector (web scraping)
+- [ ] Kiesraad election results connector (EML/XML parsing)
+- [ ] OpenRaadsinformatie connector (ElasticSearch API)
+- [ ] Woogle / WOO document connector
+- [ ] Officiële Bekendmakingen connector
+- [ ] data.overheid.nl connector (CKAN API)
+
+### M6 — Analytics + Promise Tracking
+
+> Higher-order intelligence on top of the normalised data (Phase 4).
 
 - [ ] Voting pattern analysis (loyalty, coalition alignment)
+- [ ] Cross-source entity resolution and deduplication
 - [ ] Attendance and activity metrics
-- [ ] Promise extraction from meeting transcripts
+- [ ] Promise extraction from meeting transcripts and coalition agreements
 - [ ] Promise ↔ vote linking
-- [ ] Trend detection across time and municipalities
+- [ ] Legislative tracking dashboard (bill progress)
+- [ ] Trend detection across time, municipalities, and parliament
 - [ ] Metrics API and dashboard widgets
 
-### M5 — Multi-Source + Public Dashboard
+### M7 — Public Dashboard + Data Export
 
-> Expand beyond iBabs; launch public-facing interface.
+> Launch public-facing interface (Phase 5).
 
-- [ ] OpenRaadsinformatie connector
-- [ ] Tweede Kamer Open Data connector
-- [ ] News / press release ingestion
-- [ ] Identity resolution across sources
-- [ ] Public dashboard with municipality comparison
+- [ ] Public dashboard with municipality and parliament comparison
 - [ ] Embeddable widgets for media and civic organisations
+- [ ] Bulk data export (CSV, JSON, Parquet)
 - [ ] API rate limiting and usage analytics

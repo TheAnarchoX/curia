@@ -1,22 +1,30 @@
 # Curia
 
-**Open-source Dutch political intelligence — making municipal politics transparent and accessible.**
+**Open-source intelligence platform for Dutch politics — from municipal councils to national parliament.**
 
 ---
 
 ## What is Curia?
 
 Curia is an open-source platform that ingests, normalises, and surfaces data
-from Dutch municipal council systems. It turns scattered meeting agendas,
-motions, votes, and documents into a structured, searchable knowledge base that
-journalists, researchers, and engaged citizens can query through a clean API and
-web interface.
+from **every level of Dutch politics** — national parliament, provincial
+councils, water boards, and municipal councils. It turns scattered bills,
+motions, votes, debates, and documents into a structured, searchable knowledge
+base that journalists, researchers, and engaged citizens can query through a
+clean API and web interface.
 
-The project starts with **iBabs** — the portal software used by hundreds of
-Dutch municipalities — and is designed to expand to additional sources such as
-OpenRaadsinformatie, parliamentary APIs, and news feeds. A pluggable connector
-architecture makes it straightforward to add new data sources without touching
-the core domain.
+**National politics is the primary long-term target.** The **Tweede Kamer**
+(House of Representatives) offers the richest open data source in Dutch politics
+via its official OData API — covering bills, motions, amendments, votes, debates,
+and committee reports under a CC-0 license. Municipal councils are the starting
+point because scraping-based connectors like iBabs provide an accessible
+proof-of-concept for the architecture.
+
+Key data sources include the **Tweede Kamer OData API**, **OpenRaadsinformatie**
+(300+ municipalities), **Kiesraad** election results, **Eerste Kamer** (Senate),
+**Woogle/WOO** government documents, **Officiële Bekendmakingen**, and
+**iBabs** municipal portals. A pluggable connector architecture makes it
+straightforward to add new data sources without touching the core domain.
 
 Curia is built as a **uv workspace monorepo**: a FastAPI REST API, a Celery
 background worker, a Next.js frontend, and a set of shared Python packages for
@@ -39,7 +47,9 @@ the domain model, ingestion framework, and source-specific connectors.
 │  ├── domain/       Pydantic v2 models + SQLAlchemy ORM  │
 │  ├── ingestion/    Crawling & parsing framework         │
 │  └── connectors/                                        │
-│      └── ibabs/    iBabs municipal portal connector     │
+│      ├── ibabs/    iBabs municipal portal connector     │
+│      ├── tweedekamer/ Tweede Kamer OData connector      │
+│      └── …         Future: ORI, Kiesraad, Eerste Kamer  │
 │                                                         │
 │  infra/            Dockerfiles (api, worker, web)       │
 │  migrations/       Alembic database migrations          │
@@ -51,8 +61,18 @@ the domain model, ingestion framework, and source-specific connectors.
 Data flows **left → right**:
 
 ```
-iBabs portals ─► Connector ─► Ingestion ─► Domain/DB ─► API ─► Web
-                 (crawl)      (parse)      (store)     (serve)
+Data Sources ─► Connector ─► Ingestion ─► Domain/DB ─► API ─► Web
+                 (crawl/     (parse)      (store)     (serve)
+                  query)
+
+Sources:
+  Tweede Kamer OData API ──┐
+  OpenRaadsinformatie ──────┤
+  Kiesraad elections ───────┤
+  iBabs portals ────────────┼──► Connectors ──► unified pipeline
+  Eerste Kamer (scrape) ────┤
+  Woogle / WOO ────────────┤
+  data.overheid.nl ─────────┘
 ```
 
 ---
@@ -178,12 +198,14 @@ Curia/
 │   │       ├── rate_limiter.py
 │   │       └── retry.py
 │   └── connectors/
-│       └── ibabs/            # iBabs portal connector
-│           └── curia_connectors_ibabs/
-│               ├── connector.py
-│               ├── mapper.py
-│               ├── models/
-│               └── parsers/  # BeautifulSoup HTML parsers
+│       ├── ibabs/            # iBabs portal connector
+│       │   └── curia_connectors_ibabs/
+│       │       ├── connector.py
+│       │       ├── mapper.py
+│       │       ├── models/
+│       │       └── parsers/  # BeautifulSoup HTML parsers
+│       └── tweedekamer/      # Tweede Kamer OData connector (planned)
+│           └── …
 ├── migrations/               # Alembic (PostgreSQL)
 │   └── versions/
 ├── infra/
