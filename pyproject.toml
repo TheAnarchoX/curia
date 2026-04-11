@@ -33,6 +33,11 @@ members = [
     "packages/domain",
     "packages/ingestion",
     "packages/connectors/ibabs",
+    "packages/connectors/tweedekamer",
+    "packages/connectors/openraadsinformatie",
+    "packages/connectors/kiesraad",
+    "packages/connectors/woogle",
+    "packages/connectors/eerstekamer",
 ]
 
 # ---------------------------------------------------------------------------

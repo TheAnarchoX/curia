@@ -6,7 +6,12 @@ requires-python = ">=3.12"
 members = [
     "curia",
     "curia-api",
+    "curia-connectors-eerstekamer",
     "curia-connectors-ibabs",
+    "curia-connectors-kiesraad",
+    "curia-connectors-ori",
+    "curia-connectors-tweedekamer",
+    "curia-connectors-woogle",
     "curia-domain",
     "curia-ingestion",
     "curia-worker",
@@ -287,6 +292,29 @@ requires-dist = [
 ]
 
 [[package]]
+name = "curia-connectors-eerstekamer"
+version = "0.1.0"
+source = { editable = "packages/connectors/eerstekamer" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "curia-domain" },
+    { name = "curia-ingestion" },
+    { name = "httpx" },
+    { name = "lxml" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.12,<5" },
+    { name = "curia-domain", editable = "packages/domain" },
+    { name = "curia-ingestion", editable = "packages/ingestion" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "lxml", specifier = ">=5.0,<6" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
+
+[[package]]
 name = "curia-connectors-ibabs"
 version = "0.1.0"
 source = { editable = "packages/connectors/ibabs" }
@@ -306,6 +334,82 @@ requires-dist = [
     { name = "curia-ingestion", editable = "packages/ingestion" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "lxml", specifier = ">=5.0,<6" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
+
+[[package]]
+name = "curia-connectors-kiesraad"
+version = "0.1.0"
+source = { editable = "packages/connectors/kiesraad" }
+dependencies = [
+    { name = "curia-domain" },
+    { name = "curia-ingestion" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "curia-domain", editable = "packages/domain" },
+    { name = "curia-ingestion", editable = "packages/ingestion" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
+
+[[package]]
+name = "curia-connectors-ori"
+version = "0.1.0"
+source = { editable = "packages/connectors/openraadsinformatie" }
+dependencies = [
+    { name = "curia-domain" },
+    { name = "curia-ingestion" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "curia-domain", editable = "packages/domain" },
+    { name = "curia-ingestion", editable = "packages/ingestion" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
+
+[[package]]
+name = "curia-connectors-tweedekamer"
+version = "0.1.0"
+source = { editable = "packages/connectors/tweedekamer" }
+dependencies = [
+    { name = "curia-domain" },
+    { name = "curia-ingestion" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "curia-domain", editable = "packages/domain" },
+    { name = "curia-ingestion", editable = "packages/ingestion" },
+    { name = "httpx", specifier = ">=0.27,<1" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
+
+[[package]]
+name = "curia-connectors-woogle"
+version = "0.1.0"
+source = { editable = "packages/connectors/woogle" }
+dependencies = [
+    { name = "curia-domain" },
+    { name = "curia-ingestion" },
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "curia-domain", editable = "packages/domain" },
+    { name = "curia-ingestion", editable = "packages/ingestion" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "pydantic", specifier = ">=2,<3" },
 ]
 
