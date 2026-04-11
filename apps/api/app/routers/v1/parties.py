@@ -19,9 +19,7 @@ async def list_parties(
 ) -> PaginatedResponse[PartyResponse]:
     """List all parties."""
     # TODO: implement real DB query
-    return PaginatedResponse[PartyResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[PartyResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{party_id}", response_model=PartyResponse)

@@ -1,4 +1,5 @@
 """Token-bucket rate limiter for async crawling."""
+
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +18,7 @@ class RateLimiter:
     """
 
     def __init__(self, rate: float = 2.0, burst: int = 5) -> None:
+        """Initialize the rate limiter with a sustained rate and burst size."""
         self._rate = rate
         self._burst = burst
         self._tokens = float(burst)

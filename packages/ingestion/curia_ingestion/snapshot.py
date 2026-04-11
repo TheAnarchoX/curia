@@ -1,4 +1,5 @@
 """Raw snapshot storage for crawl results."""
+
 from __future__ import annotations
 
 import abc
@@ -38,6 +39,7 @@ class FileSystemSnapshotStore(RawSnapshotStore):
     """Stores raw snapshots as JSON files in a local directory."""
 
     def __init__(self, base_dir: str | Path) -> None:
+        """Initialize the store with a base directory for snapshot files."""
         self._base_dir = Path(base_dir)
         self._base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +61,7 @@ class FileSystemSnapshotStore(RawSnapshotStore):
         return CrawlResult.model_validate(data)
 
     async def store(self, crawl_result: CrawlResult) -> str:
+        """Store a crawl result as a JSON file and return its URL hash key."""
         key = _url_hash(crawl_result.url)
         path = self._path_for(key)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +70,7 @@ class FileSystemSnapshotStore(RawSnapshotStore):
         return key
 
     async def retrieve(self, url_hash: str) -> CrawlResult | None:
+        """Retrieve a crawl result by hash, or None if not found."""
         path = self._path_for(url_hash)
         if not path.exists():
             return None
@@ -74,4 +78,5 @@ class FileSystemSnapshotStore(RawSnapshotStore):
         return self._deserialise(data)
 
     async def exists(self, url_hash: str) -> bool:
+        """Check whether a snapshot with the given hash is stored."""
         return self._path_for(url_hash).exists()

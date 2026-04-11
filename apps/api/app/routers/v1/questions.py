@@ -19,9 +19,7 @@ async def list_questions(
 ) -> PaginatedResponse[WrittenQuestionResponse]:
     """List all written questions."""
     # TODO: implement real DB query
-    return PaginatedResponse[WrittenQuestionResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[WrittenQuestionResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{question_id}", response_model=WrittenQuestionResponse)

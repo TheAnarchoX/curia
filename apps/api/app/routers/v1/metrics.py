@@ -19,9 +19,7 @@ async def list_metric_definitions(
 ) -> PaginatedResponse[MetricDefinitionResponse]:
     """List all metric definitions."""
     # TODO: implement real DB query
-    return PaginatedResponse[MetricDefinitionResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[MetricDefinitionResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/results", response_model=PaginatedResponse[MetricResultResponse])
@@ -34,6 +32,4 @@ async def list_metric_results(
 ) -> PaginatedResponse[MetricResultResponse]:
     """List metric results, optionally filtered by entity or metric code."""
     # TODO: implement real DB query with filters
-    return PaginatedResponse[MetricResultResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[MetricResultResponse].build(items=[], total=0, page=page, page_size=page_size)

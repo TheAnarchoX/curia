@@ -24,20 +24,11 @@ from curia_domain.enums import (
     DecisionType,
     DocumentType,
     ExtractionStatus,
-    GoverningBodyType,
-    IdentityMatchType,
     IdentityReviewStatus,
-    InstitutionType,
-    JurisdictionLevel,
     MandateRole,
     MeetingStatus,
-    MetricTimeGrain,
-    MetricValueType,
     PropositionStatus,
-    SourceType,
-    VoteOutcome,
 )
-
 
 # ---------------------------------------------------------------------------
 # Organisational hierarchy
@@ -93,9 +84,7 @@ class GoverningBodyRow(TimestampMixin, Base):
     __tablename__ = "governing_bodies"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    institution_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("institutions.id"), nullable=False
-    )
+    institution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("institutions.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     body_type: Mapped[str] = mapped_column(String(32), nullable=False)
     valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -156,12 +145,8 @@ class MandateRow(TimestampMixin, Base):
     __tablename__ = "mandates"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    politician_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("politicians.id"), nullable=False
-    )
-    party_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("parties.id"), nullable=True
-    )
+    politician_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("politicians.id"), nullable=False)
+    party_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("parties.id"), nullable=True)
     institution_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("institutions.id"), nullable=True
     )
@@ -171,9 +156,7 @@ class MandateRow(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default=MandateRole.MEMBER)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    source_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sources.id"), nullable=True
-    )
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     politician: Mapped[PoliticianRow] = relationship()
@@ -209,9 +192,7 @@ class MeetingRow(TimestampMixin, Base):
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=MeetingStatus.SCHEDULED)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    source_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sources.id"), nullable=True
-    )
+    source_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=True)
 
     governing_body: Mapped[GoverningBodyRow] = relationship(back_populates="meetings")
     agenda_items: Mapped[list[AgendaItemRow]] = relationship(back_populates="meeting")
@@ -229,9 +210,7 @@ class AgendaItemRow(TimestampMixin, Base):
     __tablename__ = "agenda_items"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    meeting_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False
-    )
+    meeting_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False)
     ordering: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -254,9 +233,7 @@ class DebateSegmentRow(TimestampMixin, Base):
     __tablename__ = "debate_segments"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    meeting_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False
-    )
+    meeting_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
@@ -294,9 +271,7 @@ class DocumentRow(TimestampMixin, Base):
     text_extracted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     text_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    meeting_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True
-    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
@@ -317,15 +292,11 @@ class MotionRow(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     proposer_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
-    meeting_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True
-    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
-    document_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
-    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=PropositionStatus.SUBMITTED)
     submitted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     decided_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -349,15 +320,11 @@ class AmendmentRow(TimestampMixin, Base):
     target_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
     )
-    meeting_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True
-    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
-    document_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
-    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=PropositionStatus.SUBMITTED)
     submitted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     decided_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -380,12 +347,8 @@ class WrittenQuestionRow(TimestampMixin, Base):
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     questioner_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
     addressee: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    meeting_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True
-    )
-    document_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
-    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=PropositionStatus.SUBMITTED)
     submitted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     answered_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -408,18 +371,12 @@ class PromiseRow(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
-    maker_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("politicians.id"), nullable=True
-    )
-    meeting_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True
-    )
+    maker_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("politicians.id"), nullable=True)
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=True)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
-    document_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True
-    )
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=PropositionStatus.PENDING)
     made_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -443,9 +400,7 @@ class DecisionRow(TimestampMixin, Base):
     __tablename__ = "decisions"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    meeting_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False
-    )
+    meeting_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id"), nullable=False)
     agenda_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("agenda_items.id"), nullable=True
     )
@@ -462,9 +417,7 @@ class VoteRow(TimestampMixin, Base):
     __tablename__ = "votes"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    decision_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("decisions.id"), nullable=False
-    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("decisions.id"), nullable=False)
     proposition_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     proposition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -530,9 +483,7 @@ class SourceRecordRow(TimestampMixin, Base):
     __tablename__ = "source_records"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False
-    )
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
     external_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -552,9 +503,7 @@ class ExtractionRunRow(TimestampMixin, Base):
     __tablename__ = "extraction_runs"
 
     id: Mapped[uuid.UUID] = uuid_pk()
-    source_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False
-    )
+    source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
     extractor_name: Mapped[str] = mapped_column(String(128), nullable=False)
     extractor_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -587,9 +536,7 @@ class AssertionRow(TimestampMixin, Base):
     field_name: Mapped[str] = mapped_column(String(128), nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    evidence_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("evidence.id"), nullable=True
-    )
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("evidence.id"), nullable=True)
 
     __table_args__ = (
         Index("ix_assertions_source_record_id", "source_record_id"),
@@ -650,9 +597,7 @@ class IdentityResolutionReviewRow(TimestampMixin, Base):
     candidate_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("identity_candidates.id"), nullable=False
     )
-    status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=IdentityReviewStatus.PENDING
-    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=IdentityReviewStatus.PENDING)
     reviewer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

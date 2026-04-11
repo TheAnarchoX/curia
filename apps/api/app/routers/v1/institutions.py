@@ -19,9 +19,7 @@ async def list_institutions(
 ) -> PaginatedResponse[InstitutionResponse]:
     """List all institutions."""
     # TODO: implement real DB query
-    return PaginatedResponse[InstitutionResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[InstitutionResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{institution_id}", response_model=InstitutionResponse)

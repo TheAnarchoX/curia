@@ -19,9 +19,7 @@ async def list_sources(
 ) -> PaginatedResponse[SourceResponse]:
     """List all data sources."""
     # TODO: implement real DB query
-    return PaginatedResponse[SourceResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[SourceResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{source_id}", response_model=SourceResponse)

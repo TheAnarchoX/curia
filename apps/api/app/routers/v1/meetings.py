@@ -19,9 +19,7 @@ async def list_meetings(
 ) -> PaginatedResponse[MeetingResponse]:
     """List all meetings."""
     # TODO: implement real DB query
-    return PaginatedResponse[MeetingResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[MeetingResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{meeting_id}", response_model=MeetingResponse)

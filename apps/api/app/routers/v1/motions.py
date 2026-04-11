@@ -19,9 +19,7 @@ async def list_motions(
 ) -> PaginatedResponse[MotionResponse]:
     """List all motions."""
     # TODO: implement real DB query
-    return PaginatedResponse[MotionResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[MotionResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{motion_id}", response_model=MotionResponse)

@@ -19,9 +19,7 @@ async def list_agenda_items(
 ) -> PaginatedResponse[AgendaItemResponse]:
     """List all agenda items."""
     # TODO: implement real DB query
-    return PaginatedResponse[AgendaItemResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[AgendaItemResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{agenda_item_id}", response_model=AgendaItemResponse)

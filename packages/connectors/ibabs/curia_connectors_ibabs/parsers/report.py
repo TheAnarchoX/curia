@@ -6,7 +6,7 @@ import re
 from datetime import UTC, date, datetime
 from urllib.parse import urljoin
 
-from curia_ingestion.interfaces import CrawlResult, ParseResult, ParsedEntity
+from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
 
 from curia_connectors_ibabs.models.pages import IbabsDocumentLink, IbabsReportEntry
 from curia_connectors_ibabs.parsers.base import IbabsParser
@@ -26,26 +26,22 @@ class IbabsReportParser(IbabsParser):
     PARSER_VERSION = "0.1.0"
 
     def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
         if "text/html" not in content_type:
             return False
         return any(pat.search(url) for pat in _REPORT_PATTERNS)
 
     def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
         soup = self._make_soup(crawl_result.raw_content or b"")
         entities: list[ParsedEntity] = []
         warnings: list[str] = []
 
         # TODO: Confirm selectors against live portal HTML
-        rows = soup.select(
-            "table.reports tbody tr, "
-            "div.report-item, "
-            "li.report-entry"
-        )
+        rows = soup.select("table.reports tbody tr, div.report-item, li.report-entry")
 
         if not rows:
-            warnings.append(
-                "No report rows found — CSS selectors may need updating"
-            )
+            warnings.append("No report rows found — CSS selectors may need updating")
 
         for row in rows:
             title_el = row.select_one("td.title a, a.report-title, span.title a")

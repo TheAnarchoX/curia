@@ -1,21 +1,28 @@
 """Core ingestion interfaces."""
+
 from __future__ import annotations
+
 import abc
+import uuid
 from datetime import datetime
 from typing import Any
+
 from pydantic import BaseModel, Field
-import uuid
+
 
 class SourceConnectorMeta(BaseModel):
     """Metadata about a source connector."""
+
     source_type: str
     name: str
     version: str
     description: str
     capabilities: list[str] = Field(default_factory=list)
 
+
 class CrawlConfig(BaseModel):
     """Configuration for a crawl job."""
+
     source_id: uuid.UUID
     base_url: str
     max_pages: int = 1000
@@ -24,8 +31,10 @@ class CrawlConfig(BaseModel):
     retry_max: int = 3
     checkpoint: dict[str, Any] = Field(default_factory=dict)
 
+
 class CrawlResult(BaseModel):
     """Result of a single page crawl."""
+
     url: str
     status_code: int
     content_hash: str
@@ -36,26 +45,39 @@ class CrawlResult(BaseModel):
     discovered_urls: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
 
+
 class SourceConnector(abc.ABC):
     """Base class for all source connectors."""
-    
+
     @abc.abstractmethod
-    def get_meta(self) -> SourceConnectorMeta: ...
-    
+    def get_meta(self) -> SourceConnectorMeta:
+        """Return metadata describing this connector."""
+        ...
+
     @abc.abstractmethod
-    async def discover_pages(self, config: CrawlConfig) -> list[str]: ...
-    
+    async def discover_pages(self, config: CrawlConfig) -> list[str]:
+        """Discover seed URLs to crawl for the given configuration."""
+        ...
+
     @abc.abstractmethod
-    async def crawl_page(self, url: str, config: CrawlConfig) -> CrawlResult: ...
-    
+    async def crawl_page(self, url: str, config: CrawlConfig) -> CrawlResult:
+        """Fetch and return the crawl result for a single page."""
+        ...
+
     @abc.abstractmethod
-    async def get_checkpoint(self) -> dict[str, Any]: ...
-    
+    async def get_checkpoint(self) -> dict[str, Any]:
+        """Return the current checkpoint state for resumable crawling."""
+        ...
+
     @abc.abstractmethod
-    async def set_checkpoint(self, checkpoint: dict[str, Any]) -> None: ...
+    async def set_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Restore checkpoint state from a previous crawl run."""
+        ...
+
 
 class ParsedEntity(BaseModel):
     """A single entity extracted by a parser."""
+
     entity_type: str
     source_url: str
     external_id: str | None = None
@@ -63,8 +85,10 @@ class ParsedEntity(BaseModel):
     confidence: float = 1.0
     evidence_snippet: str | None = None
 
+
 class ParseResult(BaseModel):
     """Result of parsing a crawled page."""
+
     source_url: str
     parser_name: str
     parser_version: str
@@ -74,11 +98,16 @@ class ParseResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
     confidence: float = 1.0
 
+
 class Parser(abc.ABC):
     """Base class for source-specific parsers."""
-    
+
     @abc.abstractmethod
-    def can_parse(self, url: str, content_type: str) -> bool: ...
-    
+    def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
+        ...
+
     @abc.abstractmethod
-    def parse(self, crawl_result: CrawlResult) -> ParseResult: ...
+    def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
+        ...

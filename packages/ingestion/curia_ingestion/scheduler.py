@@ -1,4 +1,5 @@
 """Crawl job scheduling."""
+
 from __future__ import annotations
 
 import abc
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 class CrawlJob(BaseModel):
     """Represents a single crawl job in the queue."""
+
     job_id: uuid.UUID = Field(default_factory=uuid.uuid4)
     source_type: str
     source_id: uuid.UUID
@@ -44,6 +46,7 @@ class SimpleCrawlScheduler(CrawlScheduler):
     """In-memory FIFO crawl scheduler for development and testing."""
 
     def __init__(self) -> None:
+        """Initialize the in-memory scheduler with empty job queues."""
         self._pending: deque[CrawlJob] = deque()
         self._in_progress: dict[uuid.UUID, CrawlJob] = {}
         self._completed: dict[uuid.UUID, CrawlJob] = {}

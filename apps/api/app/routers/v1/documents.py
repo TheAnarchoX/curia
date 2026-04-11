@@ -19,9 +19,7 @@ async def list_documents(
 ) -> PaginatedResponse[DocumentResponse]:
     """List all documents."""
     # TODO: implement real DB query
-    return PaginatedResponse[DocumentResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[DocumentResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)

@@ -29,6 +29,7 @@ class IbabsCanonicalMapper:
     # ------------------------------------------------------------------
 
     def map_meeting_summary(self, summary: IbabsMeetingSummary) -> list[dict]:
+        """Map a meeting summary to canonical assertion dicts."""
         return [
             {
                 "entity_type": "meeting",
@@ -48,6 +49,7 @@ class IbabsCanonicalMapper:
     # ------------------------------------------------------------------
 
     def map_meeting_detail(self, detail: IbabsMeetingDetail) -> list[dict]:
+        """Map a meeting detail with agenda items and documents to assertions."""
         assertions: list[dict] = [
             {
                 "entity_type": "meeting",
@@ -79,6 +81,7 @@ class IbabsCanonicalMapper:
         item: IbabsAgendaItem,
         meeting_id: str | None = None,
     ) -> list[dict]:
+        """Map an agenda item and its sub-items to canonical assertions."""
         ext_id = f"{meeting_id}:agenda:{item.ordering}" if meeting_id else str(item.ordering)
 
         assertions: list[dict] = [
@@ -90,11 +93,7 @@ class IbabsCanonicalMapper:
                     "title": item.title,
                     "description": item.description,
                 },
-                "relations": (
-                    [{"type": "belongs_to_meeting", "target_id": meeting_id}]
-                    if meeting_id
-                    else []
-                ),
+                "relations": ([{"type": "belongs_to_meeting", "target_id": meeting_id}] if meeting_id else []),
                 "source_system": "ibabs",
             }
         ]
@@ -119,6 +118,7 @@ class IbabsCanonicalMapper:
         event: IbabsSpeakerEvent,
         agenda_item_id: str | None = None,
     ) -> list[dict]:
+        """Map a speaker event to a canonical assertion dict."""
         return [
             {
                 "entity_type": "speaker_event",
@@ -131,11 +131,7 @@ class IbabsCanonicalMapper:
                     "duration_seconds": event.duration_seconds,
                     "role": event.role,
                 },
-                "relations": (
-                    [{"type": "spoken_at", "target_id": agenda_item_id}]
-                    if agenda_item_id
-                    else []
-                ),
+                "relations": ([{"type": "spoken_at", "target_id": agenda_item_id}] if agenda_item_id else []),
                 "source_system": "ibabs",
             }
         ]
@@ -145,6 +141,7 @@ class IbabsCanonicalMapper:
     # ------------------------------------------------------------------
 
     def map_report(self, report: IbabsReportEntry) -> list[dict]:
+        """Map a report entry and its documents to canonical assertions."""
         assertions: list[dict] = [
             {
                 "entity_type": "report",
@@ -173,6 +170,7 @@ class IbabsCanonicalMapper:
         doc: IbabsDocumentLink,
         parent_id: str | None = None,
     ) -> list[dict]:
+        """Map a document link to a canonical assertion dict."""
         return [
             {
                 "entity_type": "document",
@@ -183,11 +181,7 @@ class IbabsCanonicalMapper:
                     "mime_type": doc.mime_type,
                     "file_size": doc.file_size,
                 },
-                "relations": (
-                    [{"type": "attached_to", "target_id": parent_id}]
-                    if parent_id
-                    else []
-                ),
+                "relations": ([{"type": "attached_to", "target_id": parent_id}] if parent_id else []),
                 "source_system": "ibabs",
             }
         ]
@@ -197,6 +191,7 @@ class IbabsCanonicalMapper:
     # ------------------------------------------------------------------
 
     def map_party_roster(self, entry: IbabsPartyRosterEntry) -> list[dict]:
+        """Map a party roster entry to a canonical assertion dict."""
         assertions: list[dict] = [
             {
                 "entity_type": "party",
@@ -216,6 +211,7 @@ class IbabsCanonicalMapper:
     # ------------------------------------------------------------------
 
     def map_member_roster(self, entry: IbabsMemberRosterEntry) -> list[dict]:
+        """Map a member roster entry to a canonical assertion dict."""
         return [
             {
                 "entity_type": "member",
@@ -228,11 +224,7 @@ class IbabsCanonicalMapper:
                     "active_until": entry.active_until.isoformat() if entry.active_until else None,
                     "photo_url": entry.photo_url,
                 },
-                "relations": (
-                    [{"type": "member_of", "target_id": entry.party_name}]
-                    if entry.party_name
-                    else []
-                ),
+                "relations": ([{"type": "member_of", "target_id": entry.party_name}] if entry.party_name else []),
                 "source_system": "ibabs",
             }
         ]

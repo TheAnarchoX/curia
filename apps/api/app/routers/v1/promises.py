@@ -19,9 +19,7 @@ async def list_promises(
 ) -> PaginatedResponse[PromiseResponse]:
     """List all promises."""
     # TODO: implement real DB query
-    return PaginatedResponse[PromiseResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[PromiseResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{promise_id}", response_model=PromiseResponse)

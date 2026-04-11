@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-from curia_ingestion.interfaces import CrawlResult, ParseResult, ParsedEntity
+from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
 
 from curia_connectors_ibabs.models.pages import IbabsPartyRosterEntry
 from curia_connectors_ibabs.parsers.base import IbabsParser
@@ -24,32 +24,25 @@ class IbabsPartyRosterParser(IbabsParser):
     PARSER_VERSION = "0.1.0"
 
     def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
         if "text/html" not in content_type:
             return False
         return any(pat.search(url) for pat in _PARTY_PATTERNS)
 
     def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
         soup = self._make_soup(crawl_result.raw_content or b"")
         entities: list[ParsedEntity] = []
         warnings: list[str] = []
 
         # TODO: Confirm selectors against live portal HTML
-        rows = soup.select(
-            "table.parties tbody tr, "
-            "div.party-item, "
-            "li.party-entry, "
-            "div.fractie"
-        )
+        rows = soup.select("table.parties tbody tr, div.party-item, li.party-entry, div.fractie")
 
         if not rows:
-            warnings.append(
-                "No party rows found — CSS selectors may need updating"
-            )
+            warnings.append("No party rows found — CSS selectors may need updating")
 
         for row in rows:
-            name_el = row.select_one(
-                "td.party-name, span.party-name, h3.party-name, a.party-name"
-            )
+            name_el = row.select_one("td.party-name, span.party-name, h3.party-name, a.party-name")
             abbr_el = row.select_one("td.abbreviation, span.abbreviation")
 
             party_name = self._extract_text(name_el)

@@ -1,5 +1,6 @@
 """Curia ingestion layer – crawling, parsing, and snapshot storage."""
 
+from curia_ingestion.client import CrawlerClient
 from curia_ingestion.interfaces import (
     CrawlConfig,
     CrawlResult,
@@ -9,11 +10,10 @@ from curia_ingestion.interfaces import (
     SourceConnector,
     SourceConnectorMeta,
 )
-from curia_ingestion.registry import SourceRegistry
-from curia_ingestion.scheduler import CrawlScheduler, SimpleCrawlScheduler
 from curia_ingestion.rate_limiter import RateLimiter
+from curia_ingestion.registry import SourceRegistry
 from curia_ingestion.retry import RetryPolicy, retry_with_policy
-from curia_ingestion.client import CrawlerClient
+from curia_ingestion.scheduler import CrawlScheduler, SimpleCrawlScheduler
 from curia_ingestion.snapshot import FileSystemSnapshotStore, RawSnapshotStore
 
 __all__ = [

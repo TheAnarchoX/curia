@@ -1,7 +1,7 @@
 """SQLAlchemy declarative base, mixins, and common column helpers."""
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import DateTime, func

@@ -19,9 +19,7 @@ async def list_amendments(
 ) -> PaginatedResponse[AmendmentResponse]:
     """List all amendments."""
     # TODO: implement real DB query
-    return PaginatedResponse[AmendmentResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[AmendmentResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{amendment_id}", response_model=AmendmentResponse)

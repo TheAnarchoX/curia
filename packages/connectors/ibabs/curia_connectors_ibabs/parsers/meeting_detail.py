@@ -6,7 +6,7 @@ import re
 from datetime import UTC, date, datetime
 from urllib.parse import urljoin
 
-from curia_ingestion.interfaces import CrawlResult, ParseResult, ParsedEntity
+from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
 
 from curia_connectors_ibabs.models.pages import (
     IbabsAgendaItem,
@@ -29,11 +29,13 @@ class IbabsMeetingDetailParser(IbabsParser):
     PARSER_VERSION = "0.1.0"
 
     def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
         if "text/html" not in content_type:
             return False
         return any(pat.search(url) for pat in _MEETING_DETAIL_PATTERNS)
 
     def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
         soup = self._make_soup(crawl_result.raw_content or b"")
         entities: list[ParsedEntity] = []
         warnings: list[str] = []

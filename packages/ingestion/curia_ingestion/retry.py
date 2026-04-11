@@ -1,4 +1,5 @@
 """Retry policy and helper for transient HTTP errors."""
+
 from __future__ import annotations
 
 import asyncio
@@ -16,6 +17,7 @@ _DEFAULT_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({408, 429, 500, 502,
 @dataclass(frozen=True)
 class RetryPolicy:
     """Configuration for retry behaviour."""
+
     max_retries: int = 3
     backoff_factor: float = 0.5
     retryable_status_codes: frozenset[int] = field(default_factory=lambda: _DEFAULT_RETRYABLE_STATUS_CODES)
@@ -25,6 +27,7 @@ class RetryableError(Exception):
     """Raised when a retryable failure occurs (e.g. transient HTTP status)."""
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
+        """Initialize with an error message and optional HTTP status code."""
         super().__init__(message)
         self.status_code = status_code
 

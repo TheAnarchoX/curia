@@ -19,9 +19,7 @@ async def list_politicians(
 ) -> PaginatedResponse[PoliticianResponse]:
     """List all politicians."""
     # TODO: implement real DB query
-    return PaginatedResponse[PoliticianResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[PoliticianResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{politician_id}", response_model=PoliticianResponse)

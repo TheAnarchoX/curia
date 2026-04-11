@@ -8,7 +8,6 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-
 from curia_ingestion.interfaces import (
     CrawlConfig,
     CrawlResult,
@@ -25,6 +24,7 @@ class IbabsConnector(SourceConnector):
     """Connector that discovers and crawls pages on an iBabs portal."""
 
     def __init__(self, source_config: IbabsSourceConfig) -> None:
+        """Initialize the connector with an iBabs source configuration."""
         self._config = source_config
         self._checkpoint: dict[str, Any] = {}
         self._client: httpx.AsyncClient | None = None
@@ -34,13 +34,13 @@ class IbabsConnector(SourceConnector):
     # ------------------------------------------------------------------
 
     def get_meta(self) -> SourceConnectorMeta:
+        """Return metadata describing this iBabs connector instance."""
         return SourceConnectorMeta(
             source_type="ibabs",
             name=f"iBabs – {self._config.municipality_slug}",
             version=_VERSION,
             description=(
-                f"Scrapes the iBabs portal for {self._config.municipality_slug} "
-                f"({self._config.portal_variant} variant)"
+                f"Scrapes the iBabs portal for {self._config.municipality_slug} ({self._config.portal_variant} variant)"
             ),
             capabilities=list(self._config.known_capabilities),
         )
@@ -107,9 +107,11 @@ class IbabsConnector(SourceConnector):
         )
 
     async def get_checkpoint(self) -> dict[str, Any]:
+        """Return the current checkpoint state for resumable crawling."""
         return dict(self._checkpoint)
 
     async def set_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Restore checkpoint state from a previous crawl run."""
         self._checkpoint = dict(checkpoint)
 
     # ------------------------------------------------------------------

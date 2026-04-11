@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from urllib.parse import urljoin
 
-from curia_ingestion.interfaces import CrawlResult, ParseResult, ParsedEntity
+from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
 
 from curia_connectors_ibabs.models.pages import IbabsSpeakerEvent
 from curia_connectors_ibabs.parsers.base import IbabsParser
@@ -25,26 +24,22 @@ class IbabsSpeakerTimelineParser(IbabsParser):
     PARSER_VERSION = "0.1.0"
 
     def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
         if "text/html" not in content_type:
             return False
         return any(pat.search(url) for pat in _SPEAKER_PATTERNS)
 
     def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
         soup = self._make_soup(crawl_result.raw_content or b"")
         entities: list[ParsedEntity] = []
         warnings: list[str] = []
 
         # TODO: Confirm selectors against live portal HTML
-        rows = soup.select(
-            "table.speaker-timeline tbody tr, "
-            "div.speaker-event, "
-            "li.speaker-entry"
-        )
+        rows = soup.select("table.speaker-timeline tbody tr, div.speaker-event, li.speaker-entry")
 
         if not rows:
-            warnings.append(
-                "No speaker-timeline rows found — CSS selectors may need updating"
-            )
+            warnings.append("No speaker-timeline rows found — CSS selectors may need updating")
 
         for row in rows:
             name_el = row.select_one("td.speaker-name, span.speaker-name")

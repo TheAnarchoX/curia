@@ -19,9 +19,7 @@ async def list_votes(
 ) -> PaginatedResponse[VoteResponse]:
     """List all votes."""
     # TODO: implement real DB query
-    return PaginatedResponse[VoteResponse].build(
-        items=[], total=0, page=page, page_size=page_size
-    )
+    return PaginatedResponse[VoteResponse].build(items=[], total=0, page=page, page_size=page_size)
 
 
 @router.get("/{vote_id}", response_model=VoteResponse)

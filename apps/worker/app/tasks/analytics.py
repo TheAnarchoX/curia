@@ -8,9 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="analytics.recompute_metrics")
-def recompute_metrics(
-    metric_codes: list[str], entity_id: str | None = None
-) -> dict[str, str]:
+def recompute_metrics(metric_codes: list[str], entity_id: str | None = None) -> dict[str, str]:
     """Recompute specific metrics, optionally scoped to one entity.
 
     Runs the metric computation pipeline for each requested code

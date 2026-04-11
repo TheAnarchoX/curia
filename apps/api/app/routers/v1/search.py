@@ -35,6 +35,4 @@ async def search(
 ) -> PaginatedResponse[SearchResultItem]:
     """Search across entities (documents, motions, questions, etc.)."""
     # TODO: implement real full-text / vector search
-    return PaginatedResponse[SearchResultItem].build(
-        items=[], total=0, page=body.page, page_size=body.page_size
-    )
+    return PaginatedResponse[SearchResultItem].build(items=[], total=0, page=body.page, page_size=body.page_size)

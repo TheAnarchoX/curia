@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime
 
-from curia_ingestion.interfaces import CrawlResult, ParseResult, ParsedEntity
+from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
 
 from curia_connectors_ibabs.models.pages import IbabsMemberRosterEntry
 from curia_connectors_ibabs.parsers.base import IbabsParser
@@ -25,32 +25,25 @@ class IbabsMemberRosterParser(IbabsParser):
     PARSER_VERSION = "0.1.0"
 
     def can_parse(self, url: str, content_type: str) -> bool:
+        """Check whether this parser handles the given URL and content type."""
         if "text/html" not in content_type:
             return False
         return any(pat.search(url) for pat in _MEMBER_PATTERNS)
 
     def parse(self, crawl_result: CrawlResult) -> ParseResult:
+        """Parse crawl result into structured entities."""
         soup = self._make_soup(crawl_result.raw_content or b"")
         entities: list[ParsedEntity] = []
         warnings: list[str] = []
 
         # TODO: Confirm selectors against live portal HTML
-        rows = soup.select(
-            "table.members tbody tr, "
-            "div.member-item, "
-            "li.member-entry, "
-            "div.raadslid"
-        )
+        rows = soup.select("table.members tbody tr, div.member-item, li.member-entry, div.raadslid")
 
         if not rows:
-            warnings.append(
-                "No member rows found — CSS selectors may need updating"
-            )
+            warnings.append("No member rows found — CSS selectors may need updating")
 
         for row in rows:
-            name_el = row.select_one(
-                "td.member-name, span.member-name, h3.member-name, a.member-name"
-            )
+            name_el = row.select_one("td.member-name, span.member-name, h3.member-name, a.member-name")
             party_el = row.select_one("td.party, span.party-name")
             role_el = row.select_one("td.role, span.role")
             from_el = row.select_one("td.active-from, span.active-from")

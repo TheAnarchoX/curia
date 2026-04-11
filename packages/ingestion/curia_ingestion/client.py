@@ -1,4 +1,5 @@
 """High-level async HTTP client for crawling."""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,7 +10,7 @@ import httpx
 
 from curia_ingestion.interfaces import CrawlConfig, CrawlResult
 from curia_ingestion.rate_limiter import RateLimiter
-from curia_ingestion.retry import RetryPolicy, RetryableError, retry_with_policy
+from curia_ingestion.retry import RetryableError, RetryPolicy, retry_with_policy
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class CrawlerClient:
         retry_policy: RetryPolicy | None = None,
         headers: dict[str, str] | None = None,
     ) -> None:
+        """Initialize the crawler client with optional rate limiter, retry policy, and headers."""
         self._rate_limiter = rate_limiter or RateLimiter()
         self._retry_policy = retry_policy or RetryPolicy()
         self._headers = headers or {

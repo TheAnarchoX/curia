@@ -13,9 +13,7 @@ logger = logging.getLogger("curia.api")
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Log every request with method, path, status code, and duration."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Process request and log method, path, status, and duration."""
         start = time.perf_counter()
         response = await call_next(request)

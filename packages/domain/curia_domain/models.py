@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date as Date
-from datetime import datetime, timezone
+from datetime import date as Date, datetime, timezone
 
 from pydantic import BaseModel, Field
 
@@ -25,7 +24,6 @@ from curia_domain.enums import (
     SourceType,
     VoteOutcome,
 )
-
 
 # ---------------------------------------------------------------------------
 # Base

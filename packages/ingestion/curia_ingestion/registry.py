@@ -1,4 +1,5 @@
 """Source connector registry."""
+
 from __future__ import annotations
 
 import logging
@@ -14,6 +15,7 @@ class SourceRegistry:
     """Registry that maps source_type strings to SourceConnector classes."""
 
     def __init__(self) -> None:
+        """Initialize an empty connector registry."""
         self._connectors: dict[str, type[SourceConnector]] = {}
 
     def register(self, connector_class: type[SourceConnector]) -> type[SourceConnector]:
@@ -42,8 +44,7 @@ class SourceRegistry:
             return self._connectors[source_type]
         except KeyError:
             raise KeyError(
-                f"No connector registered for source_type={source_type!r}. "
-                f"Available: {sorted(self._connectors)}"
+                f"No connector registered for source_type={source_type!r}. Available: {sorted(self._connectors)}"
             ) from None
 
     def list_registered(self) -> list[str]:
