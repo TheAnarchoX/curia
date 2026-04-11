@@ -1,0 +1,87 @@
+name: "📋 Task"
+description: A concrete, agent-friendly work item
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Task
+        A focused, actionable work item. Designed to be picked up by either
+        a human developer or an AI coding agent.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architecture Layer
+      description: Primary layer this task affects
+      options:
+        - "Connectors (data source integration)"
+        - "Ingestion (crawling, parsing, snapshots)"
+        - "Domain (models, enums, database)"
+        - "API (endpoints, schemas)"
+        - "Worker (background tasks, pipelines)"
+        - "Web (frontend, dashboard)"
+        - "Infrastructure (Docker, CI/CD, deployment)"
+        - "Documentation"
+        - "Cross-cutting (multiple layers)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: What needs to be done?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done Criteria
+      description: Concrete, testable checklist.
+      placeholder: |
+        - [ ] Unit tests pass
+        - [ ] Type checks pass
+        - [ ] Lint passes
+    validations:
+      required: true
+
+  - type: textarea
+    id: agent-notes
+    attributes:
+      label: Agent Implementation Notes
+      description: |
+        Key files, patterns, constraints, and other context helpful
+        for AI agents. The more specific, the better the result.
+      placeholder: |
+        Files to modify:
+        - packages/domain/curia_domain/models.py (add new model)
+        - apps/api/app/routers/v1/new_router.py (new file)
+        
+        Follow the pattern in apps/api/app/routers/v1/meetings.py
+        Use UUID primary keys per packages/domain/curia_domain/db/base.py
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      options:
+        - "🟢 Small (< 1 hour, single file/module)"
+        - "🟡 Medium (1-4 hours, few files across 1-2 layers)"
+        - "🟠 Large (4-8 hours, multiple files across layers)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent-suitability
+    attributes:
+      label: Agent Suitability
+      description: How well-suited is this task for an AI coding agent?
+      options:
+        - "🤖 Excellent — clear scope, well-defined patterns"
+        - "🤖🧑 Good — mostly automatable, may need human review"
+        - "🧑🤖 Mixed — needs human judgment + agent execution"
+        - "🧑 Human-only — requires domain expertise or creative decisions"
+    validations:
+      required: true

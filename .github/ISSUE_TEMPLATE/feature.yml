@@ -1,0 +1,70 @@
+name: "✨ Feature"
+description: A new feature or enhancement for Curia
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature Request
+        Describe the feature you'd like to see in Curia.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architecture Layer
+      description: Which part of Curia does this feature affect?
+      options:
+        - "Connectors (data source integration)"
+        - "Ingestion (crawling, parsing, snapshots)"
+        - "Domain (models, enums, database)"
+        - "API (endpoints, schemas)"
+        - "Worker (background tasks, pipelines)"
+        - "Web (frontend, dashboard)"
+        - "Infrastructure (Docker, CI/CD, deployment)"
+        - "Cross-cutting (multiple layers)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear description of what you want to happen.
+      placeholder: "As a user/developer, I want to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: What does "done" look like? List concrete, testable criteria.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: agent-notes
+    attributes:
+      label: Agent Implementation Notes
+      description: |
+        Optional: hints for AI agents working on this issue.
+        Include file paths, function names, relevant patterns, or architectural constraints.
+      placeholder: |
+        Key files: packages/domain/curia_domain/models.py
+        Pattern: follow existing router structure in apps/api/app/routers/v1/
+        Constraint: must use async/await
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      options:
+        - "🟢 Small (< 1 hour, single file/module)"
+        - "🟡 Medium (1-4 hours, few files across 1-2 layers)"
+        - "🟠 Large (4-8 hours, multiple files across layers)"
+        - "🔴 Epic (multi-day, significant architecture)"
+    validations:
+      required: true
