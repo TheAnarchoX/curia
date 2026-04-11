@@ -325,7 +325,127 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 
 ---
 
-## 8. Roadmap
+## 8. Infrastructure & Deployment
+
+### 8.1 Architecture Overview
+
+```
+Users
+  │
+  ▼
+┌─────────────────────────────────────────────┐
+│  Cloudflare (DNS, CDN, WAF, edge cache)     │
+└──────────────┬──────────────────────────────┘
+               │ HTTPS
+┌──────────────▼──────────────────────────────┐
+│  Caddy (reverse proxy, auto TLS)            │
+│  ┌────────┐ ┌────────┐ ┌────────────────┐  │
+│  │ Next.js│ │FastAPI  │ │ Celery Workers │  │
+│  │  :3000 │ │  :8000  │ │ (background)   │  │
+│  └────────┘ └───┬─────┘ └──────┬─────────┘  │
+│                 │              │              │
+│  ┌──────────────▼──────────────▼──────────┐  │
+│  │  PostgreSQL :5432  │  Redis :6379      │  │
+│  └────────────────────────────────────────┘  │
+└──────────────────────────────────────────────┘
+         Hetzner Cloud VPC (eu-central)
+```
+
+- **DNS & CDN:** Cloudflare — DNS, CDN for static assets, DDoS protection, edge
+  caching. The free tier covers DNS, basic WAF, and CDN.
+- **Compute:** Hetzner Cloud — cost-effective European VPS, GDPR-compliant,
+  5–10× cheaper than equivalent AWS/GCP instances.
+- **Reverse proxy:** Caddy — automatic HTTPS via Let's Encrypt, simple
+  Caddyfile configuration, HTTP/2 and HTTP/3 support out of the box.
+- **IaC:** Terraform for all infrastructure provisioning (Hetzner servers,
+  Cloudflare DNS records, firewall rules).
+- **Containers:** Docker Compose for orchestration, graduating to Kubernetes
+  (k3s on Hetzner) only when scale demands it.
+
+### 8.2 Deployment Stages
+
+#### Stage 1 — Single Server (current → M4)
+
+- One Hetzner CX32 or CX42 VPS (4–8 vCPU, 8–16 GB RAM).
+- Docker Compose with Caddy as the reverse proxy in front of all services.
+- PostgreSQL + Redis co-located on the same machine.
+- Terraform provisions the VPS, DNS records, and firewall rules.
+- **Good for:** development, MVP, early users (up to ~1,000 daily users).
+
+#### Stage 2 — Multi-Service (M4 → M6)
+
+- Separate Hetzner servers for compute (API + workers) and data (PostgreSQL,
+  Redis).
+- Hetzner managed PostgreSQL or a dedicated database server.
+- Celery workers scaled independently from the API.
+- Hetzner load balancer in front of API replicas.
+- Terraform manages all resources.
+- **Good for:** moderate traffic (1k–10k daily users).
+
+#### Stage 3 — Kubernetes (M7+, if needed)
+
+- k3s cluster on Hetzner Cloud (or Hetzner managed Kubernetes when available).
+- Horizontal pod autoscaling for API and workers.
+- Separate node pools for compute-heavy crawling vs. API serving.
+- **When to move:** when you need auto-scaling, blue-green deployments, or >10
+  service replicas.
+- Only if/when the complexity is justified — don't prematurely adopt k8s.
+
+### 8.3 Service Architecture
+
+| Service | Port | Role |
+|---------|------|------|
+| Caddy | 80/443 | Reverse proxy, TLS termination, static file serving |
+| Next.js | 3000 | Server-rendered frontend (App Router) |
+| FastAPI | 8000 | REST API, OpenAPI docs |
+| Celery workers | — | Background tasks: crawling, parsing, extraction |
+| PostgreSQL | 5432 | Primary datastore |
+| Redis | 6379 | Celery broker, result backend, future caching |
+
+Caddy routes requests by path:
+
+- `/` → Next.js (frontend)
+- `/api/*` → FastAPI (backend)
+- `/docs` → FastAPI (OpenAPI docs)
+- Static assets (`/_next/static/*`) are cached at the Cloudflare edge.
+
+### 8.4 Key Infrastructure Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Reverse proxy | Caddy over Nginx/Traefik | Simpler config, automatic HTTPS, good defaults |
+| Compute | Hetzner over AWS/GCP | 5–10× cheaper for equivalent compute, EU-based, GDPR native |
+| CDN | Cloudflare free tier | Sufficient for DNS, CDN, and basic WAF |
+| IaC | Terraform over Pulumi/Ansible | Industry standard, excellent Hetzner provider |
+| Orchestration | Docker Compose → k8s | Complexity matches team size; graduate when needed |
+
+### 8.5 Terraform Structure
+
+```
+infra/
+  terraform/
+    environments/
+      staging/        # terraform.tfvars for staging
+      production/     # terraform.tfvars for production
+    modules/
+      hetzner-server/ # VPS provisioning, firewall, SSH keys
+      cloudflare-dns/ # DNS records, page rules, cache settings
+      postgres/       # Database server or managed DB
+      caddy/          # Caddy config provisioning
+```
+
+Each environment imports the shared modules and supplies environment-specific
+variables (server size, domain name, feature flags). State is stored in a remote
+backend (Hetzner Object Storage or Terraform Cloud).
+
+> **Full details:** see [`docs/project-management/infrastructure.md`](docs/project-management/infrastructure.md)
+> for Caddy configuration examples, Docker Compose production overlay design,
+> monitoring, backup strategy, CI/CD pipeline, cost estimates, and the decision
+> framework for graduating from Docker Compose to Kubernetes.
+
+---
+
+## 9. Roadmap
 
 ### M1 — Foundation ✅
 
@@ -362,6 +482,7 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 - [ ] Web: institution browser, meeting viewer, politician profiles
 - [ ] Web: search interface with faceted filters
 - [ ] API documentation and interactive explorer
+- [ ] Deploy to staging (single Hetzner server + Caddy + Cloudflare)
 
 ### M4 — Tweede Kamer Integration
 
@@ -407,3 +528,4 @@ Development follows a **human-orchestrated, agent-driven workflow**:
 - [ ] Embeddable widgets for media and civic organisations
 - [ ] Bulk data export (CSV, JSON, Parquet)
 - [ ] API rate limiting and usage analytics
+- [ ] Production infrastructure with monitoring, backups, and alerting
