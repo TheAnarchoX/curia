@@ -141,7 +141,9 @@ class IbabsConnector(SourceConnector):
         links: list[str] = []
 
         for anchor in soup.find_all("a", href=True):
-            href = anchor["href"]
+            href = anchor.get("href")
+            if not isinstance(href, str):
+                continue
             absolute = urljoin(page_url, href)
             parsed = urlparse(absolute)
             if parsed.netloc == origin.netloc:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -425,8 +426,8 @@ class VoteRow(TimestampMixin, Base):
     votes_for: Mapped[int | None] = mapped_column(Integer, nullable=True)
     votes_against: Mapped[int | None] = mapped_column(Integer, nullable=True)
     votes_abstain: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    party_breakdown: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    politician_votes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    party_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    politician_votes: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("ix_votes_decision_id", "decision_id"),
@@ -472,7 +473,7 @@ class SourceRow(TimestampMixin, Base):
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (Index("ix_sources_source_type", "source_type"),)
 
@@ -488,7 +489,7 @@ class SourceRecordRow(TimestampMixin, Base):
     url: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    raw_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    raw_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("ix_source_records_source_id", "source_id"),
@@ -580,7 +581,7 @@ class IdentityCandidateRow(TimestampMixin, Base):
     match_type: Mapped[str] = mapped_column(String(32), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     reasons: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
-    context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    context: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("ix_identity_candidates_entity_type", "entity_type"),

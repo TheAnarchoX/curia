@@ -1,0 +1,1 @@
+"""Curia API application package."""
