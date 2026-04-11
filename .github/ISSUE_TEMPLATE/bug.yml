@@ -1,0 +1,58 @@
+name: "🐛 Bug Report"
+description: Something is broken or not working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Bug Report
+        Help us fix the issue by providing details below.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Architecture Layer
+      description: Which part of Curia is affected?
+      options:
+        - "Connectors (data source integration)"
+        - "Ingestion (crawling, parsing, snapshots)"
+        - "Domain (models, enums, database)"
+        - "API (endpoints, schemas)"
+        - "Worker (background tasks, pipelines)"
+        - "Web (frontend, dashboard)"
+        - "Infrastructure (Docker, CI/CD, deployment)"
+        - "Unknown / Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the issue.
+      placeholder: |
+        1. Run `make run-api`
+        2. Call `GET /api/v1/meetings`
+        3. See error...
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, environment details, etc.

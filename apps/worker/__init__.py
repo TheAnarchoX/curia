@@ -1,0 +1,1 @@
+"""Curia worker application package."""
