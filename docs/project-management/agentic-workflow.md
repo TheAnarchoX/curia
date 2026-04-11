@@ -73,18 +73,24 @@ Merge to main → CI runs → milestone progress updates
 Create milestones that match `docs/project-management/milestones.md`:
 
 ```bash
-# Bootstrap milestones (run once)
+# Bootstrap milestones (run once — or use scripts/bootstrap-github.sh)
 gh milestone create "M2: iBabs Live Integration" \
-  --description "End-to-end data flow from iBabs portals to the database"
+  --description "Prove end-to-end pipeline with municipal council data"
 
-gh milestone create "M3: API & Frontend MVP" \
-  --description "Functional REST API and basic web dashboard"
+gh milestone create "M3: Tweede Kamer Integration" \
+  --description "Connect to national parliament OData API"
 
-gh milestone create "M4: Analytics & Promise Tracking" \
-  --description "Derive insights from raw political data"
+gh milestone create "M4: API & Frontend MVP" \
+  --description "Functional REST API and state-of-the-art web data explorer"
 
-gh milestone create "M5: Multi-Source & Public Dashboard" \
-  --description "Expand beyond iBabs and create a public-facing product"
+gh milestone create "M5: Additional Data Sources" \
+  --description "OpenRaadsinformatie, Kiesraad, Eerste Kamer, Woogle"
+
+gh milestone create "M6: Analytics & Promise Tracking" \
+  --description "Derive insights from political data at all levels"
+
+gh milestone create "M7: Public Dashboard & Platform" \
+  --description "Polished public-facing product with production infrastructure"
 ```
 
 ### Projects

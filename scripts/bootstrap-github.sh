@@ -489,21 +489,317 @@ Test paths configured in \`pyproject.toml\` as \`testpaths = [\"tests\"]\`
 Use pytest fixtures for common setup.
 Mock external services (DB, Redis) for unit tests."
 
-issue "Infrastructure: production Docker Compose with Traefik" "M7: Public Dashboard & Platform" "layer:infra,size:large,agent:mixed" \
+issue "Infrastructure: Terraform + Hetzner + Cloudflare base setup" "M4: API & Frontend MVP" "layer:infra,size:large,agent:mixed" \
 "## Task
-Create a production-ready Docker Compose setup.
+Set up the base Terraform infrastructure for staging deployment on Hetzner + Cloudflare.
 
 ### Acceptance Criteria
-- [ ] Traefik reverse proxy with automatic HTTPS
-- [ ] API, Worker, Web services behind Traefik
-- [ ] PostgreSQL with persistent volume and backups
-- [ ] Redis with persistence
+- [ ] Terraform modules in \`infra/terraform/\`: hetzner-server, cloudflare-dns
+- [ ] Provisions a Hetzner CX32 VPS with Docker + Caddy
+- [ ] Cloudflare DNS records pointing to Hetzner IP
+- [ ] Firewall rules: only 80/443 public, SSH via Hetzner firewall
+- [ ] Terraform state stored in Hetzner Object Storage (S3-compatible)
+- [ ] \`terraform plan\` and \`terraform apply\` work from CI
+- [ ] Variables for staging vs. production environments
+
+### Agent Notes
+See \`docs/project-management/infrastructure.md\` for full architecture.
+Hetzner provider: \`hetznercloud/hcloud\`
+Cloudflare provider: \`cloudflare/cloudflare\`
+Structure: \`infra/terraform/environments/{staging,production}/\` + \`infra/terraform/modules/\`"
+
+issue "Infrastructure: Caddy reverse proxy configuration" "M4: API & Frontend MVP" "layer:infra,size:medium,agent:excellent" \
+"## Task
+Create production Caddyfile for reverse proxying all Curia services.
+
+### Acceptance Criteria
+- [ ] Caddyfile at \`infra/caddy/Caddyfile\`
+- [ ] Routes: \`/\` → Next.js (:3000), \`/api/*\` → FastAPI (:8000)
+- [ ] Automatic HTTPS via Cloudflare DNS challenge
+- [ ] Security headers (HSTS, CSP, X-Frame-Options)
+- [ ] Gzip/Brotli compression
+- [ ] Access logging
+- [ ] Health check endpoint at \`/health\`
+
+### Agent Notes
+Caddy docs: https://caddyserver.com/docs
+Use \`tls { dns cloudflare {env.CF_API_TOKEN} }\` for DNS challenge.
+See \`docs/project-management/infrastructure.md\` for examples."
+
+issue "Infrastructure: production Docker Compose with Caddy" "M4: API & Frontend MVP" "layer:infra,size:medium,agent:good" \
+"## Task
+Create a production Docker Compose overlay for deployment on Hetzner.
+
+### Acceptance Criteria
+- [ ] \`docker-compose.prod.yml\` extends base compose file
+- [ ] Caddy as reverse proxy (replaces dev port mapping)
+- [ ] PostgreSQL with persistent volume
+- [ ] Redis with AOF persistence
 - [ ] Health checks on all services
-- [ ] Environment-based configuration
+- [ ] Resource limits (memory, CPU)
+- [ ] Log rotation configuration
+- [ ] Environment-based configuration (\`.env.production\`)
 
 ### Agent Notes
 Current \`docker-compose.yml\` is development-only.
-Create \`docker-compose.prod.yml\` for production."
+Use Caddy Docker image: \`caddy:2-alpine\`
+See \`docs/project-management/infrastructure.md\` for overlay design."
+
+issue "Infrastructure: CI/CD pipeline for automated deployments" "M4: API & Frontend MVP" "layer:infra,size:large,agent:good" \
+"## Task
+Set up GitHub Actions CI/CD that builds, pushes Docker images, and deploys.
+
+### Acceptance Criteria
+- [ ] GitHub Actions workflow: \`.github/workflows/deploy.yml\`
+- [ ] On merge to main: build Docker images for API, Worker, Web
+- [ ] Push images to GitHub Container Registry (GHCR)
+- [ ] Deploy to staging via SSH: pull images + docker compose up
+- [ ] Manual approval gate for production deploys
+- [ ] Rollback capability (previous image tag)
+- [ ] Slack/Discord notification on deploy success/failure
+
+### Agent Notes
+Use GitHub OIDC for GHCR auth (no PAT needed).
+SSH deploy key stored as GitHub secret.
+Deploy script: \`scripts/deploy.sh\` on the server."
+
+issue "Infrastructure: PostgreSQL backup to Hetzner Object Storage" "M5: Additional Data Sources" "layer:infra,size:medium,agent:excellent" \
+"## Task
+Automated PostgreSQL backups with offsite storage.
+
+### Acceptance Criteria
+- [ ] Daily pg_dump to Hetzner Object Storage (S3-compatible)
+- [ ] Retention: 7 daily, 4 weekly, 3 monthly backups
+- [ ] Backup script at \`scripts/backup-db.sh\`
+- [ ] Cron job or systemd timer for scheduling
+- [ ] Restore script and documented procedure
+- [ ] Backup monitoring (alert on failure)
+
+### Agent Notes
+Hetzner Object Storage endpoint: \`https://fsn1.your-objectstorage.com\`
+Use \`aws s3 cp\` with Hetzner S3 credentials.
+Compress with gzip: \`pg_dump | gzip > backup.sql.gz\`"
+
+issue "Infrastructure: monitoring with Uptime Kuma + Loki" "M5: Additional Data Sources" "layer:infra,size:medium,agent:mixed" \
+"## Task
+Set up basic monitoring and log aggregation.
+
+### Acceptance Criteria
+- [ ] Uptime Kuma monitoring all services (API, Web, DB, Redis)
+- [ ] Alert on downtime via email/webhook
+- [ ] Loki for centralized log collection from Docker containers
+- [ ] Grafana dashboard for log search and basic metrics
+- [ ] All monitoring services in Docker Compose
+
+### Agent Notes
+Uptime Kuma: https://github.com/louislam/uptime-kuma
+Loki + Grafana: lightweight alternative to full Prometheus stack.
+Add to \`docker-compose.monitoring.yml\` overlay."
+
+# ------------------------------------------------------------------ Frontend Vision
+# The frontend is a state-of-the-art data exploration platform, not a basic CRUD UI
+
+issue "Web: design system and component library setup" "$M4" "layer:web,size:medium,agent:good" \
+"## Task
+Set up a design system foundation for the Curia web app — modern, data-rich, accessible.
+
+### Acceptance Criteria
+- [ ] Install and configure shadcn/ui (or Radix UI primitives)
+- [ ] Tailwind CSS theme with Curia brand colors and typography
+- [ ] Dark mode support (system preference + toggle)
+- [ ] Base layout component: sidebar navigation + main content area
+- [ ] Typography scale and spacing system
+- [ ] Icon set (Lucide)
+- [ ] Loading states and skeleton components
+- [ ] Storybook or component preview page
+
+### Agent Notes
+App: \`apps/web/\`
+Use \`npx shadcn@latest init\` to bootstrap.
+Design inspiration: data-heavy apps like Linear, Notion, Observable.
+Must be information-dense but not cluttered."
+
+issue "Web: API client layer with React Query" "$M4" "layer:web,size:medium,agent:excellent" \
+"## Task
+Set up the data fetching layer for the frontend.
+
+### Acceptance Criteria
+- [ ] Install \`@tanstack/react-query\` for client-side data fetching
+- [ ] API client module at \`src/lib/api/\` with typed fetch functions
+- [ ] TypeScript types auto-generated from OpenAPI spec (or manually maintained)
+- [ ] Query hooks for each API resource (usePoliticians, useMeetings, etc.)
+- [ ] Error handling and retry configuration
+- [ ] Loading and error state patterns
+
+### Agent Notes
+API base URL from \`NEXT_PUBLIC_API_URL\` env var.
+Use Next.js server components for initial data, React Query for client interactions.
+Consider \`openapi-typescript\` for type generation from OpenAPI spec."
+
+issue "Web: global search with command palette (⌘K)" "$M4" "layer:web,size:medium,agent:good" \
+"## Task
+Implement a powerful global search experience.
+
+### Acceptance Criteria
+- [ ] Command palette opens with ⌘K / Ctrl+K
+- [ ] Search across politicians, parties, meetings, motions, documents
+- [ ] Instant results as you type (debounced API calls)
+- [ ] Keyboard navigation through results
+- [ ] Result previews with entity type icons
+- [ ] Recent searches saved in localStorage
+
+### Agent Notes
+Use \`cmdk\` (https://cmdk.paco.me/) or build on Radix Dialog.
+API: \`GET /api/v1/search?q=...\`
+Inspiration: GitHub's command palette, Linear's search."
+
+issue "Web: politician profile pages with voting visualisations" "$M4" "layer:web,size:large,agent:good" \
+"## Task
+Create rich politician profile pages with data visualisations.
+
+### Acceptance Criteria
+- [ ] \`/politicians/[id]\` page with:
+  - Bio info, photo, party, institution(s)
+  - Voting record heatmap (calendar view of votes cast)
+  - Party loyalty percentage
+  - Committee memberships timeline
+  - Recent motions authored/co-signed
+  - Speaking activity chart
+- [ ] Interactive charts (hover for details, click to filter)
+- [ ] Comparison view: side-by-side two politicians
+- [ ] Share/embed support for individual charts
+
+### Agent Notes
+Charts: use Recharts, Nivo, or D3 + React
+Data from multiple API endpoints: \`/politicians/{id}\`, \`/politicians/{id}/votes\`, etc.
+Responsive: must work on mobile."
+
+issue "Web: meeting/session detail with timeline view" "$M4" "layer:web,size:large,agent:good" \
+"## Task
+Create a rich meeting detail page with timeline-based navigation.
+
+### Acceptance Criteria
+- [ ] \`/meetings/[id]\` page with:
+  - Meeting metadata (date, institution, type)
+  - Agenda items as interactive timeline
+  - Per-item: speakers, documents, votes, decisions
+  - Document viewer (PDF inline or download)
+  - Vote outcome visualisation (party-colored bar charts)
+- [ ] Collapsible agenda items
+- [ ] Jump-to navigation for long meetings
+- [ ] Link to source (original iBabs/TK page)
+
+### Agent Notes
+Agenda items from \`/api/v1/meetings/{id}/agenda-items\`
+Vote data from \`/api/v1/votes?meeting_id={id}\`
+Consider virtual scrolling for meetings with 50+ items."
+
+issue "Web: interactive vote explorer with filtering and visualisation" "$M4" "layer:web,size:large,agent:mixed" \
+"## Task
+Build a vote explorer — the flagship data exploration feature.
+
+### Acceptance Criteria
+- [ ] \`/votes\` page with:
+  - Filterable table of all votes (date, motion, outcome, institution)
+  - Visual breakdown per vote: party-colored stacked bar
+  - Filter by: party, politician, date range, institution, outcome
+  - Sort by date, margin, participation
+- [ ] Drill-down: click vote → see individual member votes
+- [ ] Cross-tabulation: party × vote matrix
+- [ ] Export filtered results (CSV)
+- [ ] URL-encoded filter state (shareable links)
+
+### Agent Notes
+Heavy data table: use \`@tanstack/react-table\` for virtualisation.
+Charts: party-colored bars, heatmaps.
+This is a key differentiator — must feel snappy even with 10k+ rows."
+
+issue "Web: party comparison dashboard" "$M4" "layer:web,size:medium,agent:good" \
+"## Task
+Create a dashboard for comparing political parties across data dimensions.
+
+### Acceptance Criteria
+- [ ] \`/parties\` page listing all parties with key metrics
+- [ ] \`/parties/[id]\` detail page with:
+  - Member list with photos
+  - Voting alignment radar chart
+  - Activity metrics (motions filed, questions asked)
+  - Coalition/opposition positioning
+- [ ] \`/parties/compare\` multi-select comparison view
+  - Side-by-side metrics
+  - Voting agreement matrix
+  - Policy topic overlap
+
+### Agent Notes
+Radar charts for multi-dimensional comparison.
+Data from: \`/api/v1/parties\`, \`/api/v1/parties/{id}/members\`, \`/api/v1/metrics\`"
+
+issue "Web: document viewer and search" "$M4" "layer:web,size:medium,agent:good" \
+"## Task
+Build a document browser for political documents (motions, bills, reports).
+
+### Acceptance Criteria
+- [ ] \`/documents\` page with faceted search (type, date, author, institution)
+- [ ] Document preview with metadata sidebar
+- [ ] Full-text search within documents
+- [ ] PDF viewer for attached documents
+- [ ] Related entities sidebar (linked politicians, meetings, votes)
+- [ ] Download/export options
+
+### Agent Notes
+API: \`/api/v1/documents\`
+PDF viewer: use \`react-pdf\` or browser-native \`<embed>\`
+Heavy on search UX — this is where journalists will spend time."
+
+issue "Web: responsive mobile layout" "$M4" "layer:web,size:medium,agent:good" \
+"## Task
+Ensure the entire web app works well on mobile devices.
+
+### Acceptance Criteria
+- [ ] Responsive sidebar → bottom navigation on mobile
+- [ ] Tables collapse to card views on small screens
+- [ ] Charts resize appropriately
+- [ ] Touch-friendly interactions (no hover-only features)
+- [ ] Tested on iOS Safari and Android Chrome
+- [ ] Lighthouse mobile score > 90
+
+### Agent Notes
+Use Tailwind responsive utilities consistently.
+Test with Chrome DevTools device emulation.
+Priority pages: dashboard, politician profile, meeting detail."
+
+issue "Web: data export and sharing" "$M4" "layer:web,size:small,agent:excellent" \
+"## Task
+Add data export capabilities throughout the app.
+
+### Acceptance Criteria
+- [ ] CSV export button on all data tables
+- [ ] JSON export for API consumers
+- [ ] Share button generating URL with current filter state
+- [ ] Open Graph meta tags for social sharing previews
+- [ ] Embed code generator for charts/visualisations
+
+### Agent Notes
+CSV generation can be client-side with \`papaparse\`.
+URL state: encode filters in query params.
+OG tags: Next.js \`generateMetadata\`."
+
+issue "Web: real-time legislative tracker (bills in progress)" "M5: Additional Data Sources" "layer:web,size:large,agent:mixed" \
+"## Task
+Build a legislative tracker showing bills moving through parliament.
+
+### Acceptance Criteria
+- [ ] \`/legislation\` page showing active bills with status pipeline
+- [ ] Kanban-style view: Introduced → Committee → Plenary → Decided
+- [ ] Bill detail page with full history timeline
+- [ ] Related documents, debates, and votes linked
+- [ ] Filter by topic, committee, party
+- [ ] Notification: subscribe to bill updates
+
+### Agent Notes
+Data from Tweede Kamer: \`Zaak\`, \`Document\`, \`Kamerstukdossier\`
+Pipeline visualisation: horizontal Kanban or Gantt-like timeline.
+Critical for political journalists and lobbyists."
 
 echo ""
 echo "=== Backlog Created ==="
