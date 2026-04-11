@@ -1,0 +1,9 @@
+{
+  "municipality": "heerenveen",
+  "page_type": "document_page",
+  "source_url": "https://heerenveen.bestuurlijkeinformatie.nl/Reports/Details/09abdce1-d99d-4b60-8897-9ca886aa9d5f",
+  "fetched_at": "2026-04-11",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Document detail page for 'Amendementen 2026-2030' from Heerenveen council",
+  "notes": "iBabs Publieksportaal — URL pattern: /Reports/Details/{uuid}"
+}

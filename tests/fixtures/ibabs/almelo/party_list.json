@@ -1,0 +1,9 @@
+{
+  "municipality": "almelo",
+  "page_type": "party_list",
+  "source_url": "https://almelo.bestuurlijkeinformatie.nl/ReportCategories",
+  "fetched_at": "2026-04-11",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Report categories overview page listing document categories for Almelo municipality",
+  "notes": "iBabs Publieksportaal — URL pattern: /ReportCategories"
+}

@@ -1,0 +1,9 @@
+{
+  "municipality": "almelo",
+  "page_type": "member_roster",
+  "source_url": "https://almelo.bestuurlijkeinformatie.nl/People",
+  "fetched_at": "2026-04-11",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Member roster ('Wie is wie') listing council members and their party affiliations for Almelo",
+  "notes": "iBabs Publieksportaal — URL pattern: /People"
+}

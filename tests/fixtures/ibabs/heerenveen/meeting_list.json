@@ -1,0 +1,9 @@
+{
+  "municipality": "heerenveen",
+  "page_type": "meeting_list",
+  "source_url": "https://heerenveen.bestuurlijkeinformatie.nl/Calendar",
+  "fetched_at": "2026-04-11",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Meeting calendar overview listing upcoming and past council meetings for Heerenveen municipality",
+  "notes": "iBabs Publieksportaal — URL pattern: /Calendar"
+}
