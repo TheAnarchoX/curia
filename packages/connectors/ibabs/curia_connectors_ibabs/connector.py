@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
-from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urljoin
 
-import httpx
+from curia_ingestion.client import CrawlerClient
 from curia_ingestion.interfaces import (
     CrawlConfig,
     CrawlResult,
     SourceConnector,
     SourceConnectorMeta,
 )
+from curia_ingestion.rate_limiter import RateLimiter
+from curia_ingestion.retry import RetryPolicy
 
 from curia_connectors_ibabs.config import IbabsSourceConfig
 
@@ -27,7 +27,7 @@ class IbabsConnector(SourceConnector):
         """Initialize the connector with an iBabs source configuration."""
         self._config = source_config
         self._checkpoint: dict[str, Any] = {}
-        self._client: httpx.AsyncClient | None = None
+        self._crawler: CrawlerClient | None = None
 
     # ------------------------------------------------------------------
     # SourceConnector interface
@@ -63,47 +63,26 @@ class IbabsConnector(SourceConnector):
         return urls
 
     async def crawl_page(self, url: str, config: CrawlConfig) -> CrawlResult:
-        """Fetch a single page from the iBabs portal."""
-        client = await self._get_client(config)
-        errors: list[str] = []
+        """Fetch a single page from the iBabs portal.
+
+        Delegates to :class:`~curia_ingestion.client.CrawlerClient` which
+        handles rate limiting (via ``config.rate_limit_rps``) and retries.
+        The result is enriched with same-origin link discovery and
+        municipality metadata before being returned.
+        """
+        crawler = self._get_crawler(config)
+        result = await crawler.fetch(url, config)
+
+        # Enrich result with connector-specific metadata and discovered links.
         discovered: list[str] = []
+        if result.raw_content and "text/html" in result.content_type:
+            discovered = self._extract_same_origin_links(result.raw_content, url)
 
-        try:
-            response = await client.get(
-                url,
-                timeout=config.timeout_seconds,
-                follow_redirects=True,
-            )
-            raw = response.content
-            content_type = response.headers.get("content-type", "text/html")
-            status_code = response.status_code
-        except httpx.HTTPError as exc:
-            errors.append(f"HTTP error fetching {url}: {exc}")
-            return CrawlResult(
-                url=url,
-                status_code=0,
-                content_hash="",
-                fetched_at=datetime.now(UTC),
-                content_type="",
-                errors=errors,
-            )
-
-        content_hash = hashlib.sha256(raw).hexdigest()
-
-        # Lightweight link discovery — parsers do the real extraction
-        if "text/html" in content_type:
-            discovered = self._extract_same_origin_links(raw, url)
-
-        return CrawlResult(
-            url=url,
-            status_code=status_code,
-            content_hash=content_hash,
-            fetched_at=datetime.now(UTC),
-            content_type=content_type,
-            raw_content=raw,
-            metadata={"municipality": self._config.municipality_slug},
-            discovered_urls=discovered,
-            errors=errors,
+        return result.model_copy(
+            update={
+                "metadata": {"municipality": self._config.municipality_slug},
+                "discovered_urls": discovered,
+            }
         )
 
     async def get_checkpoint(self) -> dict[str, Any]:
@@ -118,16 +97,31 @@ class IbabsConnector(SourceConnector):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _get_client(self, config: CrawlConfig) -> httpx.AsyncClient:
-        if self._client is None:
-            self._client = httpx.AsyncClient(
+    def _get_crawler(self, config: CrawlConfig) -> CrawlerClient:
+        """Return (and lazily create) the shared :class:`CrawlerClient`.
+
+        The client is configured with a :class:`~curia_ingestion.rate_limiter.RateLimiter`
+        seeded from ``config.rate_limit_rps`` and a
+        :class:`~curia_ingestion.retry.RetryPolicy` derived from
+        ``config.retry_max``.
+
+        .. note::
+            The client is initialised once per connector instance using the
+            *first* :class:`CrawlConfig` passed to :meth:`crawl_page`.
+            Changing ``rate_limit_rps`` or ``retry_max`` in a subsequent
+            config will have no effect; create a new :class:`IbabsConnector`
+            instance if different settings are required.
+        """
+        if self._crawler is None:
+            self._crawler = CrawlerClient(
+                rate_limiter=RateLimiter(rate=config.rate_limit_rps),
+                retry_policy=RetryPolicy(max_retries=config.retry_max),
                 headers={
                     "User-Agent": f"CuriaBot/{_VERSION} (+https://github.com/curia)",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 },
-                timeout=config.timeout_seconds,
             )
-        return self._client
+        return self._crawler
 
     @staticmethod
     def _extract_same_origin_links(raw: bytes, page_url: str) -> list[str]:
