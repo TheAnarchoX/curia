@@ -6,7 +6,7 @@ import re
 from datetime import date, datetime
 from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 from curia_ingestion.interfaces import Parser
 
 
@@ -34,13 +34,31 @@ class IbabsParser(Parser):
         if not exclude_selectors:
             return element.get_text(separator=" ", strip=True)
 
-        cleaned_soup = BeautifulSoup(str(element), "lxml")
-        cleaned = cleaned_soup.select_one(element.name) or cleaned_soup
-        for selector in exclude_selectors:
-            for node in cleaned.select(selector):
-                node.decompose()
+        excluded_node_ids = {id(node) for selector in exclude_selectors for node in element.select(selector)}
+        parts: list[str] = []
 
-        return cleaned.get_text(separator=" ", strip=True)
+        for descendant in element.descendants:
+            if not isinstance(descendant, NavigableString):
+                continue
+
+            text = descendant.strip()
+            if not text:
+                continue
+
+            parent = descendant.parent
+            excluded = False
+            while isinstance(parent, Tag):
+                if id(parent) in excluded_node_ids:
+                    excluded = True
+                    break
+                if parent is element:
+                    break
+                parent = parent.parent
+
+            if not excluded:
+                parts.append(text)
+
+        return " ".join(parts)
 
     @staticmethod
     def _extract_links(soup: BeautifulSoup | Tag, base_url: str) -> list[dict[str, str]]:

@@ -51,12 +51,15 @@ class IbabsMeetingListParser(IbabsParser):
             else:
                 meeting_link = row.select_one("a.calendar-item, td.title a, a.meeting-title")
 
-            title_el = meeting_link.select_one("div.calendar-item-label") if meeting_link is not None else None
-            date_el = (
-                meeting_link.select_one("div.sr-only")
-                if meeting_link is not None
-                else row.select_one("td.date, span.meeting-date")
-            )
+            title_el = None
+            date_el = None
+            if meeting_link is not None and "calendar-item" in meeting_link.get("class", []):
+                title_el = meeting_link.select_one("div.calendar-item-label")
+                date_el = meeting_link.select_one("div.sr-only")
+            if title_el is None:
+                title_el = meeting_link
+            if date_el is None:
+                date_el = row.select_one("td.date, span.meeting-date")
             status_el = row.select_one("td.status, span.meeting-status")
 
             title = self._extract_text(

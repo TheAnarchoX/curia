@@ -18,7 +18,7 @@ FIXTURES_ROOT = Path(__file__).resolve().parent / "fixtures" / "ibabs"
 
 
 def _load_fixture(name: str, municipality: str) -> tuple[str, bytes]:
-    metadata = json.loads((FIXTURES_ROOT / municipality / f"{name}.json").read_text())
+    metadata = json.loads((FIXTURES_ROOT / municipality / f"{name}.json").read_text(encoding="utf-8"))
     html = (FIXTURES_ROOT / municipality / f"{name}.html").read_bytes()
     return metadata["source_url"], html
 
@@ -50,6 +50,34 @@ def test_meeting_list_parser_extracts_fixture_meetings(municipality: str, expect
     assert result.entities[0].data["title"]
     assert result.entities[0].data["date"] == "2026-04-01"
     assert result.entities[0].data["url"].startswith(f"https://{municipality}.bestuurlijkeinformatie.nl/Agenda/Index/")
+
+
+def test_meeting_list_parser_falls_back_to_legacy_table_markup() -> None:
+    """Meeting list parser should keep working for non-calendar meeting table rows."""
+    parser = IbabsMeetingListParser()
+    html = b"""
+    <table class="meetings">
+      <tbody>
+        <tr>
+          <td class="date">01-04-2026</td>
+          <td class="title"><a href="/Agenda/Index/legacy-1">Raadsvergadering</a></td>
+          <td class="status">scheduled</td>
+        </tr>
+      </tbody>
+    </table>
+    """
+
+    result = parser.parse(_crawl_result("https://example.test/meetings", html))
+
+    assert result.warnings == []
+    assert len(result.entities) == 1
+    assert result.entities[0].data == {
+        "title": "Raadsvergadering",
+        "date": "2026-04-01",
+        "url": "https://example.test/Agenda/Index/legacy-1",
+        "meeting_id": "legacy-1",
+        "status": "scheduled",
+    }
 
 
 @pytest.mark.parametrize(
