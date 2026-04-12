@@ -14,7 +14,7 @@ from curia_connectors_ibabs.parsers.meeting_list import IbabsMeetingListParser
 from curia_connectors_ibabs.parsers.member_roster import IbabsMemberRosterParser
 from curia_ingestion.interfaces import CrawlResult
 
-FIXTURES_ROOT = Path("/home/runner/work/Curia/Curia/tests/fixtures/ibabs")
+FIXTURES_ROOT = Path(__file__).resolve().parent / "fixtures" / "ibabs"
 
 
 def _load_fixture(name: str, municipality: str) -> tuple[str, bytes]:

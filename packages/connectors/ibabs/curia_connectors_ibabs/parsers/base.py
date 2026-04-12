@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from copy import deepcopy
 from datetime import date, datetime
 from urllib.parse import urljoin
 
@@ -35,7 +34,8 @@ class IbabsParser(Parser):
         if not exclude_selectors:
             return element.get_text(separator=" ", strip=True)
 
-        cleaned = deepcopy(element)
+        cleaned_soup = BeautifulSoup(str(element), "lxml")
+        cleaned = cleaned_soup.select_one(element.name) or cleaned_soup
         for selector in exclude_selectors:
             for node in cleaned.select(selector):
                 node.decompose()
