@@ -66,17 +66,6 @@ class IbabsEntityMapper:
     the same pages does not produce duplicate records.
     """
 
-    _HANDLERS: dict[str, str] = {
-        "party_roster": "_upsert_party",
-        "member_roster": "_upsert_politician",
-        "meeting_summary": "_upsert_meeting",
-        "meeting_detail": "_upsert_meeting",
-        "report": "_upsert_document",
-        "document_link": "_upsert_document",
-        "motion": "_upsert_motion",
-        "vote": "_upsert_vote",
-    }
-
     def __init__(
         self,
         session: AsyncSession,
@@ -85,6 +74,16 @@ class IbabsEntityMapper:
         """Initialise the mapper with an async session and governing body context."""
         self._session = session
         self._governing_body_id = governing_body_id
+        self._handlers: dict[str, Callable[[ParsedEntity], Awaitable[bool]]] = {
+            "party_roster": self._upsert_party,
+            "member_roster": self._upsert_politician,
+            "meeting_summary": self._upsert_meeting,
+            "meeting_detail": self._upsert_meeting,
+            "report": self._upsert_document,
+            "document_link": self._upsert_document,
+            "motion": self._upsert_motion,
+            "vote": self._upsert_vote,
+        }
 
     # ------------------------------------------------------------------
     # Public API
@@ -95,12 +94,11 @@ class IbabsEntityMapper:
         result = EntityMapResult()
 
         for entity in parse_result.entities:
-            method_name = self._HANDLERS.get(entity.entity_type)
-            if method_name is None:
+            handler = self._handlers.get(entity.entity_type)
+            if handler is None:
                 result.skipped += 1
                 continue
 
-            handler: Callable[[ParsedEntity], Awaitable[bool]] = getattr(self, method_name)
             try:
                 created = await handler(entity)
                 if created:
