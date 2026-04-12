@@ -37,23 +37,26 @@ class IbabsAgendaItemParser(IbabsParser):
 
         # --- Title & description -------------------------------------------------
         # TODO: Confirm selectors against live portal HTML
-        title_el = soup.select_one("h1.agenda-title, h2.agenda-title, h1")
-        desc_el = soup.select_one("div.agenda-description, div.item-body, div.content")
+        title_el = soup.select_one("span.panel-title-label, h1.agenda-title, h2.agenda-title, h1")
+        desc_el = soup.select_one(
+            "div.panel-body > div.row .col-12.text, div.agenda-description, div.item-body, div.content"
+        )
 
-        title = self._extract_text(title_el)
+        title = self._extract_text(title_el, exclude_selectors=(".text-thin",)).rstrip(" -")
         description = self._extract_text(desc_el)
 
         # --- Ordering (try to extract from breadcrumb / numbering) ---------------
-        ordering_match = re.search(r"(\d+)", crawl_result.url.rstrip("/").rsplit("/", 1)[-1])
+        ordering_raw = self._extract_text(soup.select_one("div.panel-id"))
+        ordering_match = re.search(r"(\d+)", ordering_raw or crawl_result.url.rstrip("/").rsplit("/", 1)[-1])
         ordering = int(ordering_match.group(1)) if ordering_match else 0
 
         # --- Documents -----------------------------------------------------------
         doc_links: list[IbabsDocumentLink] = []
-        for anchor in soup.select("a.document-link, a[href*='document'], a[href$='.pdf']"):
+        for anchor in soup.select("ul.list-attachments a[href], a.document-link, a[href*='document'], a[href$='.pdf']"):
             if anchor.has_attr("href"):
                 doc_links.append(
                     IbabsDocumentLink(
-                        title=self._extract_text(anchor),
+                        title=self._extract_text(anchor, exclude_selectors=(".badge", ".icon", ".sr-only")),
                         url=urljoin(crawl_result.url, anchor["href"]),
                     )
                 )

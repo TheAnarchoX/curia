@@ -39,25 +39,40 @@ class IbabsMeetingListParser(IbabsParser):
         # TODO: Replace selectors with real portal-specific CSS selectors after
         # analysing live iBabs HTML. The structure below mirrors the typical
         # iBabs DOM: a table or repeated <div> blocks per meeting.
-        rows = soup.select("table.meetings tbody tr, div.meeting-item")
+        rows = soup.select("table.meetings tbody tr, div.meeting-item, a.calendar-item")
 
         if not rows:
             warnings.append("No meeting rows found — CSS selectors may need updating for this portal variant")
 
         meetings: list[IbabsMeetingSummary] = []
         for row in rows:
-            title_el = row.select_one("td.title a, a.meeting-title")
-            date_el = row.select_one("td.date, span.meeting-date")
+            if row.name == "a":
+                meeting_link = row
+            else:
+                meeting_link = row.select_one("a.calendar-item, td.title a, a.meeting-title")
+
+            title_el = (
+                meeting_link.select_one("div.calendar-item-label")
+                if meeting_link is not None
+                else None
+            )
+            date_el = (
+                meeting_link.select_one("div.sr-only")
+                if meeting_link is not None
+                else row.select_one("td.date, span.meeting-date")
+            )
             status_el = row.select_one("td.status, span.meeting-status")
 
-            title = self._extract_text(title_el)
-            href = title_el["href"] if title_el and title_el.has_attr("href") else ""
+            title = self._extract_text(
+                title_el,
+                exclude_selectors=(".calendar-item-location", ".calendar-item-subtitle", ".sr-only"),
+            )
+            href = meeting_link["href"] if meeting_link and meeting_link.has_attr("href") else ""
             abs_url = urljoin(crawl_result.url, href) if href else crawl_result.url
 
             raw_date = self._extract_text(date_el)
-            try:
-                meeting_date = datetime.strptime(raw_date, "%d-%m-%Y").date()
-            except (ValueError, TypeError):
+            meeting_date = self._try_parse_date(raw_date)
+            if meeting_date is None:
                 meeting_date = date(1970, 1, 1)
                 if raw_date:
                     warnings.append(f"Unparseable date '{raw_date}' for meeting '{title}'")

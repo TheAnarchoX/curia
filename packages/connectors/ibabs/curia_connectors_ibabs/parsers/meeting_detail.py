@@ -19,6 +19,7 @@ _MEETING_DETAIL_PATTERNS = (
     re.compile(r"/meetings/\d+", re.IGNORECASE),
     re.compile(r"/vergaderingen/\d+", re.IGNORECASE),
     re.compile(r"/meeting/detail/", re.IGNORECASE),
+    re.compile(r"/agenda/index/[0-9a-f-]+/?(\?.*)?$", re.IGNORECASE),
 )
 
 
@@ -42,20 +43,22 @@ class IbabsMeetingDetailParser(IbabsParser):
 
         # --- Title & metadata ---------------------------------------------------
         # TODO: Confirm selectors against live portal HTML
-        title_el = soup.select_one("h1.meeting-title, h1, div.meeting-header h1")
+        title_el = soup.select_one("div.box-header h1, h1.meeting-title, h1, div.meeting-header h1")
         title = self._extract_text(title_el)
 
-        date_el = soup.select_one("span.meeting-date, div.meeting-date, time")
+        date_el = soup.select_one("div.box-header h2, span.meeting-date, div.meeting-date, time")
         raw_date = self._extract_text(date_el)
-        try:
-            meeting_date = datetime.strptime(raw_date, "%d-%m-%Y").date()
-        except (ValueError, TypeError):
+        meeting_date = self._try_parse_date(raw_date)
+        if meeting_date is None:
             meeting_date = date(1970, 1, 1)
             if raw_date:
                 warnings.append(f"Unparseable date '{raw_date}'")
 
-        location_el = soup.select_one("span.meeting-location, div.location")
-        location = self._extract_text(location_el)
+        location = ""
+        for term in soup.select("dl dt"):
+            if self._extract_text(term).lower() == "locatie":
+                location = self._extract_text(term.find_next_sibling("dd"))
+                break
 
         meeting_id = crawl_result.url.rstrip("/").rsplit("/", 1)[-1]
 
@@ -64,13 +67,19 @@ class IbabsMeetingDetailParser(IbabsParser):
         # TODO: Confirm agenda row selector against live portal
         agenda_rows = soup.select("div.agenda-item, tr.agenda-item, li.agenda-item")
         for idx, row in enumerate(agenda_rows, start=1):
-            item_title_el = row.select_one("span.item-title, a.item-title, td.title")
-            item_desc_el = row.select_one("div.item-description, td.description")
-            doc_anchors = row.select("a.document-link, a[href*='document']")
+            item_title_el = row.select_one(
+                "span.panel-title-label, span.item-title, a.item-title, td.title"
+            )
+            item_desc_el = row.select_one(
+                "div.panel-body > div.row .col-12.text, div.item-description, td.description"
+            )
+            doc_anchors = row.select("ul.list-attachments a[href], a.document-link, a[href*='document']")
+
+            item_title = self._extract_text(item_title_el, exclude_selectors=(".text-thin",)).rstrip(" -")
 
             doc_links = [
                 IbabsDocumentLink(
-                    title=self._extract_text(a),
+                    title=self._extract_text(a, exclude_selectors=(".badge", ".icon", ".sr-only")),
                     url=urljoin(crawl_result.url, a["href"]),
                 )
                 for a in doc_anchors
@@ -80,23 +89,31 @@ class IbabsMeetingDetailParser(IbabsParser):
             agenda_items.append(
                 IbabsAgendaItem(
                     ordering=idx,
-                    title=self._extract_text(item_title_el) or f"Item {idx}",
+                    title=item_title or f"Item {idx}",
                     description=self._extract_text(item_desc_el),
                     document_links=doc_links,
                 )
             )
 
         # --- Top-level documents -------------------------------------------------
-        doc_section = soup.select_one("div.documents, section.documents")
         documents: list[IbabsDocumentLink] = []
-        if doc_section:
+        for term in soup.select("dl dt"):
+            if self._extract_text(term).lower() != "agenda documenten":
+                continue
+            doc_section = term.find_next_sibling("dd")
+            if doc_section is None:
+                continue
             for a in doc_section.select("a[href]"):
                 documents.append(
                     IbabsDocumentLink(
-                        title=self._extract_text(a),
+                        title=self._extract_text(
+                            a,
+                            exclude_selectors=(".badge", ".icon", ".sr-only"),
+                        ),
                         url=urljoin(crawl_result.url, a["href"]),
                     )
                 )
+            break
 
         detail = IbabsMeetingDetail(
             title=title or "(untitled meeting)",
