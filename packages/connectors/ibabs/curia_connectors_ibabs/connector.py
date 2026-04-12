@@ -75,7 +75,7 @@ class IbabsConnector(SourceConnector):
 
         # Enrich result with connector-specific metadata and discovered links.
         discovered: list[str] = []
-        if result.raw_content and "text/html" in result.content_type:
+        if result.raw_content is not None and "text/html" in result.content_type:
             discovered = self._extract_same_origin_links(result.raw_content, url)
 
         return result.model_copy(
@@ -117,7 +117,7 @@ class IbabsConnector(SourceConnector):
                 rate_limiter=RateLimiter(rate=config.rate_limit_rps),
                 retry_policy=RetryPolicy(max_retries=config.retry_max),
                 headers={
-                    "User-Agent": f"CuriaBot/{_VERSION} (+https://github.com/curia)",
+                    "User-Agent": f"CuriaBot/{_VERSION} (+https://github.com/curia-nl)",
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 },
             )
