@@ -1,0 +1,9 @@
+{
+  "municipality": "heerenveen",
+  "page_type": "meeting_detail",
+  "source_url": "https://heerenveen.bestuurlijkeinformatie.nl/Agenda/Index/f10bc579-9bd7-4a2f-94aa-3d14d498df57",
+  "fetched_at": "2026-04-11T00:00:00Z",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Detail page for a Raadsvergadering (council meeting) on 1 April 2026, including agenda items and documents",
+  "notes": "iBabs Publieksportaal — URL pattern: /Agenda/Index/{uuid}"
+}

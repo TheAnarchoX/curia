@@ -1,0 +1,9 @@
+{
+  "municipality": "almelo",
+  "page_type": "document_page",
+  "source_url": "https://almelo.bestuurlijkeinformatie.nl/Reports/Details/2a3c7d48-696a-4a7b-8636-26b1a1b1199d",
+  "fetched_at": "2026-04-11T00:00:00Z",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Document detail page for 'Moties' (motions) from Almelo council",
+  "notes": "iBabs Publieksportaal — URL pattern: /Reports/Details/{uuid}"
+}

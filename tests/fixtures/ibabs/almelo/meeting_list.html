@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vergaderingen Almelo - iBabs Publieksportaal</title>
+    <link rel="SHORTCUT ICON" href="/favicon.svg?v=20210707" />
+<link rel="icon" type="image/png" sizes="16x16" href="/Images/icons/ibabs/favicon-16x16.png?x46223">
+<link rel="icon" type="image/png" sizes="32x32" href="/Images/icons/ibabs/favicon-32x32.png?x46223">
+<link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?x46223">
+<link rel="apple-touch-icon" href="/favicon.svg?x46223">
+<link rel="apple-touch-icon" sizes="152x152" href="/Images/icons/ibabs/touch-icon-ipad.png?x46223">
+<link rel="apple-touch-icon" sizes="167x167" href="/Images/icons/ibabs/touch-icon-ipad-retina.png?x46223">
+<link rel="apple-touch-icon" sizes="180x180" href="/Images/icons/ibabs/touch-icon-iphone-retina.png?x46223">
+
+
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700,800" rel="stylesheet" />
+    <link href="/Content/css?v=D-O9VFCAyJBB8XEPmMsnpG95XXUEHBJPXwTmEDlWT0I1" rel="stylesheet"/>
+
+    <link href='/Content/cssparse?v=QN1JwYcmqKT_qXJryHjL2NSiLKcm1ogpEFyH1UVeVZ81' rel='stylesheet' data-include-ie-parse />
+
+
+<link href='/Base/SiteCss' rel='stylesheet' data-include-ie-parse />
+
+    
+    <link href="/Content/calendar?v=JDrnPrMejIwIEDvTEYP3srhH_qYJRiTh8zgXjvnnGrY1" rel="stylesheet"/>
+
+
+
+    <script src="/Script/ApplicationInsights"></script>
+</head>
+<body data-site-name="Almelo">
+    <div id="wrapper">
+        <div class="skipcontent">
+            <a href="#content" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar de inhoud van deze pagina</a>
+            <a href="#search-input" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar het zoeken</a>
+            <a href="#navigation" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar het menu</a>
+        </div>
+
+        <header id="header">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-left col-md-6">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="logo">
+                                <a href="https://www.almelo.nl/" id="logo" title="Navigeer naar https://www.almelo.nl/">
+                                        <img alt="Logo Almelo" src="data:image/png;base64,PLACEHOLDER" />
+                                </a>
+                            </div>
+                            <div class="d-block d-md-none">
+                                <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                                    <span class="navbar-toggler-icon" aria-hidden="true"></span>
+                                    <span class="navbar-toggler-text">Menu</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-left col-md-6">
+                        <div id="react-search-header-root"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <nav id="navigation" class="navbar navbar-expand-md">
+            <div class="container">
+                <div id="navbar" class="collapse navbar-collapse">
+                    <ul class="navbar-nav mr-auto">
+                        <li class="nav-item" id="nav-item-dashboard">
+                            <a href="/" class="nav-link">Startpagina</a>
+                        </li>
+                        <li class="nav-item" id="nav-item-calendar">
+                            <a href="/Calendar" class="nav-link">Vergaderingen</a>
+                        </li>
+                            <li class="nav-item dropdown" id="nav-item-report">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="nav-link-report">Overzichten</a>
+                                <div class="dropdown-menu" aria-labelledby="nav-link-report">
+                                    <a class="dropdown-item" href="/Reports">Overzichten</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/2a3c7d48-696a-4a7b-8636-26b1a1b1199d">Moties</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/440c5753-b8b2-4d71-ac05-9fae980372a0">Raadsbrieven</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/3f75bc29-68be-4cfc-812a-7f97f03bd7b2">Rekenkamer informatie</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/04879ffb-5e2a-424d-9d5e-fc576678357b">Rekenkamer rapporten</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/cc01393a-2759-45af-b76a-92d702156ac8">Schriftelijke vragen </a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/f65c99e0-11df-4da0-8f83-3ca475cf3298">Stemming</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/8cfacd0c-4a6d-432f-9908-2a6ec60852cf">Vergaderschema</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/1b7ae42b-ad50-40a4-b895-fb8c4f3fefba">Overige openbaarmakingen Woo</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/13900429-4568-40bd-badc-2a1a2db6c6f4">Projecten</a>
+                                </div>
+                            </li>
+                                                                                                        <li class="nav-item dropdown" id="nav-item-people">
+                                    <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="nav-link-people">Wie is wie</a>
+                                    <div class="dropdown-menu" aria-labelledby="nav-link-people">
+                                        <a class="dropdown-item" href="/People">Wie is wie</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/161b5c45-4ed1-4193-a421-2062fa8ceb16">Gemeenteraad</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/db153df6-31a3-4436-b823-6ce49c8d55ed">Raadsgriffie</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/13444015-8bea-4f23-906a-16757db7951b">Wethouders</a>
+                                    </div>
+                                </li>
+                                                    <li class="nav-item" id="nav-item-custom-page-2">
+                                <a href="/custompage2" class="nav-link">Praat mee</a>
+                            </li>
+                                                    <li class="nav-item" id="nav-item-help">
+                                <a href="/Help" class="nav-link">Vraagbaak</a>
+                            </li>
+                                                    <li class="nav-item" id="nav-item-contact">
+                                <a href="/Contact" class="nav-link">Contact</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        <div id="breadcrumb">
+            <div class="container">
+                <nav class="navbar navbar-expand-md" aria-label="Kruimelpad">
+                    <span class="breadcrumb-pre-text">
+                        U bevindt zich hier:
+                    </span>
+                    <ol class="breadcrumb mr-auto">
+                        <li class="breadcrumb-item">
+                            <a href="/">Home</a>
+                        </li>
+                        
+    <li class="breadcrumb-item active" aria-current="page">
+        Vergaderingen
+    </li>
+
+                    </ol>
+                    <div class="font-size">
+                        <ul>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.0" aria-label="Zet de tekst in de originele tekst grootte." aria-pressed="true">A</button>
+                            </li>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.2" aria-label="Vergroot de tekst met 20% ten opzichte van de originele tekst grootte." aria-pressed="false">A</button>
+                            </li>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.4" aria-label="Vergroot de tekst met 40% ten opzichte van de originele tekst grootte." aria-pressed="false">A</button>
+                            </li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+        </div>
+        <main id="content" class="d-flex">
+            <div class="container d-flex align-items-stretch flex-fill">
+                
+
+
+<div class="row maincontent sidecontent-left flex-fill">
+    <aside class="col-md-4 col-lg-3" id="sidecontent-left" >
+        <a href="#" class="d-inline-block d-md-none btn-sm btn-ris">
+            <i class="fas fa-arrow-left"></i>
+            Vorige pagina
+        </a>
+        <div class="filterWidget widget">
+            <fieldset>
+                <legend class="widgetLabel">Categorie&#235;n</legend>
+                <div class="widgetContent">
+                    <ul id="filterCalendar" class="list-group">
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/10000036" >B&amp;W</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/100368378" >Hamerraad</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/100369588" >Politieke avond</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/10000059" >Politieke avond 1</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/10000060" >Politieke avond 2</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/10000000" >Raad</a>
+                                </span>
+                            </li>
+                            <li class="list-group-item">
+                                <span class="agendatype">
+                                    <a href="/Calendar/OpenCategory/100439224" >Vervolg verkiezingen</a>
+                                </span>
+                            </li>
+                    </ul>
+                </div>
+            </fieldset>
+        </div>
+            <div class="filterWidget widget" id="inactive-agendatypes-widget">
+                <fieldset>
+                    <legend class="widgetLabel">
+                        <a role="button" data-toggle="collapse" href="#inactive-agendatypes" aria-expanded="false" aria-controls="inactive-agendatypes">
+                            Inactieve categorie&#235;n
+                            <span class="collapse-icon float-right">
+                                <i class="fa fa-angle-down"></i>
+                            </span>
+                        </a>
+                    </legend>
+                    <div class="widgetContent">
+                        <ul id="inactive-agendatypes" class="list-group detail collapse">
+                                <li class="list-group-item">
+                                    <span class="agendatype">
+                                        <a href="/Calendar/OpenCategory/100092789" >Raadzaken</a>
+                                    </span>
+                                </li>
+                        </ul>
+                    </div>
+                </fieldset>
+            </div>
+    </aside>
+    <section class="col" id="maincontent">
+        <div class="row">
+            <div class="box col-12" id="box-calendar">
+                <div class="box-inner">
+                    <div class="box-header" id="calendar-box">
+                        <div class="row" id="calendar-event-container">
+                            <div class="col-sm">
+                                <button class="btn btn-ris" id="goto-today" aria-label="Vandaag">Vandaag</button>
+                            </div>
+                            <div class="col-sm d-flex justify-content-center">
+                                <h1 id="calendar-title">april 2026</h1>
+                            </div>
+                            <div class="col-sm d-flex justify-content-end">
+                                <div id="month-select-wrapper">
+                                    <label for="CurrentMonth">Maand</label>
+                                    <select class="form-control" data-val="true" data-val-number="The field CurrentMonth must be a number." data-val-required="The CurrentMonth field is required." id="CurrentMonth" name="CurrentMonth"><option value="0">januari</option>
+<option value="1">februari</option>
+<option value="2">maart</option>
+<option selected="selected" value="3">april</option>
+<option value="4">mei</option>
+<option value="5">juni</option>
+<option value="6">juli</option>
+<option value="7">augustus</option>
+<option value="8">september</option>
+<option value="9">oktober</option>
+<option value="10">november</option>
+<option value="11">december</option>
+</select>
+                                </div>
+                                <div id="year-select-wrapper">
+                                    <label for="CurrentYear">Jaar</label>
+                                    <select class="form-control" data-val="true" data-val-number="The field CurrentYear must be a number." data-val-required="The CurrentYear field is required." id="CurrentYear" name="CurrentYear"><option value="2090">2090</option>
+<option selected="selected" value="2026">2026</option>
+<option value="2025">2025</option>
+<option value="2024">2024</option>
+<option value="2023">2023</option>
+<option value="2022">2022</option>
+<option value="2021">2021</option>
+<option value="2020">2020</option>
+<option value="2019">2019</option>
+<option value="2018">2018</option>
+<option value="2017">2017</option>
+<option value="2016">2016</option>
+<option value="2015">2015</option>
+<option value="2014">2014</option>
+<option value="2013">2013</option>
+<option value="2012">2012</option>
+<option value="2011">2011</option>
+<option value="2010">2010</option>
+</select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="box-content">
+                        <div class="box-tabs">
+                            <div class="nav nav-tabs flex-nowrap" role="tablist" id="tabs" aria-labelledby="calendar-title">
+                                <button class="nav-link tab" id="viewcalendar-tab" data-toggle="tab" role="tab" href="#viewcalendar" aria-controls="viewcalendar" aria-selected="false" tabindex="-1" aria-hidden="true">
+                                    Kalender
+                                </button>
+                                <button class="nav-link tab active" id="viewlist-tab" data-toggle="tab" role="tab" href="#viewlist" aria-controls="viewlist" aria-selected="true" tabindex="0">
+                                    Lijst
+                                </button>
+                            </div>
+                            <div class="tab-content" id="myTabContent">
+                                <div class="tab-pane fade" id="viewcalendar" role="tabpanel" aria-labelledby="viewcalendar-tab" aria-hidden="true">
+                                    <div id="calendar" data-url="/Calendar/GetAgendasForCalendar"></div>
+                                </div>
+                                <div class="tab-pane fade show active" id="viewlist" role="tabpanel" aria-labelledby="viewlist-tab">
+                                    <div id="listViewContainer" class="smallCalendar" data-url="/Calendar/GetMonthAgendas">
+                                        <div class="calendar-month-row">
+            <div class="calendar-items-row d-flex">
+            <div class="calendar-items-day-nr">
+                1
+            </div>
+            <div class="calendar-items">
+                    <a href="/Agenda/Index/55a2d355-2f35-4543-ae50-6d3576dd1275" class="calendar-item d-flex" tabindex="0" data-agendatype-id="10000000">
+                        <div class="calendar-item-label">
+                            Raad
+                                <span class="calendar-item-location">(Raadzaal)</span>
+                                                                                </div>
+                        <div class="sr-only">
+                            woensdag 1 april 2026
+                        </div>
+                        <div class="calendar-item-time">
+                            19:30 - 21:00
+                        </div>
+                    </a>
+                        <div class="calendar-item-description">
+                            <p>Installatie Raad</p>
+                        </div>
+            </div>
+        </div>
+        <div class="calendar-items-row d-flex">
+            <div class="calendar-items-day-nr">
+                7
+            </div>
+            <div class="calendar-items">
+                    <a href="/Agenda/Index/5a31b1f8-4bd9-42e9-84db-3062254e6d4b" class="calendar-item d-flex" tabindex="0" data-agendatype-id="10000036">
+                        <div class="calendar-item-label">
+                            B&amp;W
+                                <span class="calendar-item-location">(B&amp;W kamer)</span>
+                                                                                </div>
+                        <div class="sr-only">
+                            dinsdag 7 april 2026
+                        </div>
+                        <div class="calendar-item-time">
+                            09:30 - 13:00
+                        </div>
+                    </a>
+                    <a href="/Agenda/Index/24660920-2d8a-44e4-bf23-fac92da1ad67" class="calendar-item d-flex" tabindex="0" data-agendatype-id="100439224">
+                        <div class="calendar-item-label">
+                            Vervolg verkiezingen
+                                                                                </div>
+                        <div class="sr-only">
+                            dinsdag 7 april 2026
+                        </div>
+                        <div class="calendar-item-time">
+                            17:30 - 21:30
+                        </div>
+                    </a>
+                        <div class="calendar-item-description">
+                            <p><strong>Inwerkprogramma raad 2026 – 2030</strong><br />
+**intern<br />
+**Doel van het inwerkprogramma:<br />
+· Raadsleden en raadsvolgers maken kennis met elkaar, daardoor bodem leggen voor passende omgangsvormen<br />
+· Leren vraagstukken te bezien door de bril van een raadslid<br />
+Deelnemers: raadsleden en raadsvolgers<br />
+Er zijn 4 avonden gepland. Dit is de 1e avond,<br />
+<strong>thema is fysiek</strong></p>
+<br>
+<p><strong>Op het programma staan rondleidingen</strong> daarna volgt een:  <br />
+<strong><em>Kennismaking met de majeure onderwerpen waarover de raad gaat besluiten:</em></strong><br />
+<em>Doel: Leren vraagstukken te bezien door de bril van een raadslid</em><br />
+- <em>Omgevingsvisie in combinatie met de Regionale Ontwikkel Strategie Twente (ROS)</em> <br />
+- <em>Toelichting op de belangrijke opgaven</em><br />
+- <em>Een interview  over de belangrijke opgaven van stedelijke ontwikkeling</em><br />
+o <em>Wat is de mate van beleidsvrijheid bij beleidsontwikkeling en projecten?</em><br />
+o <em>Hoe verloopt participatie bij de beleidsontwikkeling en hoe bij projecten? Wat is daarbij de rol van de raad?</em><br />
+o <em>Wat is een passende weg voor raadsleden om om te gaan met signalen uit de samenleving?</em><br />
+o <em>Wat is het doel van de commissie hoorzitting omgevingsplannen?</em><br />
+<em>Wat is de rol van de raad bij een Buitenplanse Omgevingsplan Activiteit (BOPA) procedure?</em></p>
+                        </div>
+            </div>
+        </div>
+        <div class="calendar-items-row d-flex">
+            <div class="calendar-items-day-nr">
+                9
+            </div>
+            <div class="calendar-items">
+                    <a href="/Agenda/Index/94eb7665-707d-44bd-98cb-aa5f7bbe284e" class="calendar-item d-flex" tabindex="0" data-agendatype-id="100439224">
+                        <div class="calendar-item-label">
+                            Vervolg verkiezingen
+                                                                                </div>
+                        <div class="sr-only">
+                            donderdag 9 april 2026
+                        </div>
+                        <div class="calendar-item-time">
+                            17:30 - 21:30
+                        </div>
+                    </a>
+                        <div class="calendar-item-description">
+                            <p><strong><em>Inwerkprogramma raad 2026 - 2030</em></strong><br />
+<strong><em>Intern</em></strong><br />
+<em><strong>Deelnemers:</strong> raadsleden en raadsvolgers</em><br />
+<em><strong>Doel:</strong>· Raadsleden en raadsvolgers maken kennis met elkaar, en met ambtenaren, daardoor bodem leggen voor passende omgangsvormen</em><br />
+<em>Er zijn 4 avonden. Dit is de 2e avond,  <strong>thema is  veiligheid.</strong></em><br />
+<em>Op het programma staat onder andere een bezoek aan de politie en het team van de buitengewone Opsporingsambtenaren.</em><br />
+<em>Ook is er een gesprek met het doel</em><br />
+<em>Leren om door de bril van een raadslid te kijken<br />
+- Over welke kaders zal de raad de komende jaren besluiten nemen?<br />
+- Wat is de bevoegdheid van de raad en wat de bevoegdheid van de burgemeester<br />
+- Mate van beleidsvrijheid?<br />
+- Participatieproces en de rol van de raad<br />
+- Wat is een passende weg voor raadsleden wat betreft het doorgeven van signalen uit de samenleving?</em></p>
+                        </div>
+            </div>
+        </div>
+</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+
+
+
+            </div>
+        </main>
+                <footer id="footer-new">
+                    <div class="container">
+                        <div class="row justify-content-end align-items-start">
+                            <div class="box mb-0 col-md-auto">
+                                <div class="box-inner">
+                                    <div class="box-content p-0 py-1">
+                                        <ul class="list-group list-group-horizontal">
+                                            <li class="list-group-item">
+                                                <span>
+                                                    <a href="https://www.ibabs.com">
+                                                        iBabs Vergadermanagement
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                </span>
+                                            </li>
+                                            <li class="list-group-item">
+                                                <span>
+                                                    <a href=https://portal.ibabs.eu/>
+                                                        Inloggen
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                </span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+
+    </div>
+
+    <script src="/scripts/main?v=vm3etgvSlAyfw6tC1HnwMcGl8MfJG1x3yR3oxqTIjok1"></script>
+
+    <script src="/scripts/localization/nl?v=meRI3Lzz9Ko3fJUOcqRMr0B15-3iMzakUQ7OHp8nYy81"></script>
+
+    <script src="/Scripts/views/layout.js"></script>
+
+
+    <script type='module' src='/lib/duetds-datepicker/duet.esm.js'></script>
+
+    <script nomodule src='/lib/duetds-datepicker/duet.js'></script>
+
+
+    
+    <script type='module' src='/lib/react/main.bundle.js'></script>
+
+
+    
+    <script src="/scripts/fullcalendar/nl?v=ZTBUpieOBvS9cekAfEriNa2hQHA5YFIx8fy-5Eoa0Ck1"></script>
+
+    <script src="/scripts/calendar?v=q70P-CtvBx_dIII8r7PXu0FTmhLjbizlTp8UGxb_7AY1"></script>
+
+
+
+    <script>
+        window.appBasePath = `/`;
+    </script>
+</body>
+</html>

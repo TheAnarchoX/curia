@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moties Almelo - iBabs Publieksportaal</title>
+    <link rel="SHORTCUT ICON" href="/favicon.svg?v=20210707" />
+<link rel="icon" type="image/png" sizes="16x16" href="/Images/icons/ibabs/favicon-16x16.png?x46223">
+<link rel="icon" type="image/png" sizes="32x32" href="/Images/icons/ibabs/favicon-32x32.png?x46223">
+<link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?x46223">
+<link rel="apple-touch-icon" href="/favicon.svg?x46223">
+<link rel="apple-touch-icon" sizes="152x152" href="/Images/icons/ibabs/touch-icon-ipad.png?x46223">
+<link rel="apple-touch-icon" sizes="167x167" href="/Images/icons/ibabs/touch-icon-ipad-retina.png?x46223">
+<link rel="apple-touch-icon" sizes="180x180" href="/Images/icons/ibabs/touch-icon-iphone-retina.png?x46223">
+
+
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700,800" rel="stylesheet" />
+    <link href="/Content/css?v=D-O9VFCAyJBB8XEPmMsnpG95XXUEHBJPXwTmEDlWT0I1" rel="stylesheet"/>
+
+    <link href='/Content/cssparse?v=QN1JwYcmqKT_qXJryHjL2NSiLKcm1ogpEFyH1UVeVZ81' rel='stylesheet' data-include-ie-parse />
+
+
+<link href='/Base/SiteCss' rel='stylesheet' data-include-ie-parse />
+
+    
+
+    <script src="/Script/ApplicationInsights"></script>
+</head>
+<body data-site-name="Almelo">
+    <div id="wrapper">
+        <div class="skipcontent">
+            <a href="#content" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar de inhoud van deze pagina</a>
+            <a href="#search-input" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar het zoeken</a>
+            <a href="#navigation" class="btn btn-ris sr-only sr-only-focusable" tabindex="0">Ga naar het menu</a>
+        </div>
+
+        <header id="header">
+            <div class="container">
+                <div class="row align-items-center">
+                    <div class="col-left col-md-6">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="logo">
+                                <a href="https://www.almelo.nl/" id="logo" title="Navigeer naar https://www.almelo.nl/">
+                                        <img alt="Logo Almelo" src="data:image/png;base64,PLACEHOLDER" />
+                                </a>
+                            </div>
+                            <div class="d-block d-md-none">
+                                <button type="button" class="navbar-toggler collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                                    <span class="navbar-toggler-icon" aria-hidden="true"></span>
+                                    <span class="navbar-toggler-text">Menu</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-left col-md-6">
+                        <div id="react-search-header-root"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <nav id="navigation" class="navbar navbar-expand-md">
+            <div class="container">
+                <div id="navbar" class="collapse navbar-collapse">
+                    <ul class="navbar-nav mr-auto">
+                        <li class="nav-item" id="nav-item-dashboard">
+                            <a href="/" class="nav-link">Startpagina</a>
+                        </li>
+                        <li class="nav-item" id="nav-item-calendar">
+                            <a href="/Calendar" class="nav-link">Vergaderingen</a>
+                        </li>
+                            <li class="nav-item dropdown" id="nav-item-report">
+                                <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="nav-link-report">Overzichten</a>
+                                <div class="dropdown-menu" aria-labelledby="nav-link-report">
+                                    <a class="dropdown-item" href="/Reports">Overzichten</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/2a3c7d48-696a-4a7b-8636-26b1a1b1199d">Moties</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/440c5753-b8b2-4d71-ac05-9fae980372a0">Raadsbrieven</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/3f75bc29-68be-4cfc-812a-7f97f03bd7b2">Rekenkamer informatie</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/04879ffb-5e2a-424d-9d5e-fc576678357b">Rekenkamer rapporten</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/cc01393a-2759-45af-b76a-92d702156ac8">Schriftelijke vragen </a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/f65c99e0-11df-4da0-8f83-3ca475cf3298">Stemming</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/8cfacd0c-4a6d-432f-9908-2a6ec60852cf">Vergaderschema</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/1b7ae42b-ad50-40a4-b895-fb8c4f3fefba">Overige openbaarmakingen Woo</a>
+                                        <a class="dropdown-item ml-md-3" href="/Reports/Details/13900429-4568-40bd-badc-2a1a2db6c6f4">Projecten</a>
+                                </div>
+                            </li>
+                                                                                                        <li class="nav-item dropdown" id="nav-item-people">
+                                    <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="nav-link-people">Wie is wie</a>
+                                    <div class="dropdown-menu" aria-labelledby="nav-link-people">
+                                        <a class="dropdown-item" href="/People">Wie is wie</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/161b5c45-4ed1-4193-a421-2062fa8ceb16">Gemeenteraad</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/db153df6-31a3-4436-b823-6ce49c8d55ed">Raadsgriffie</a>
+                                            <a class="dropdown-item ml-md-3" href="/People/Profiles/13444015-8bea-4f23-906a-16757db7951b">Wethouders</a>
+                                    </div>
+                                </li>
+                                                    <li class="nav-item" id="nav-item-custom-page-2">
+                                <a href="/custompage2" class="nav-link">Praat mee</a>
+                            </li>
+                                                    <li class="nav-item" id="nav-item-help">
+                                <a href="/Help" class="nav-link">Vraagbaak</a>
+                            </li>
+                                                    <li class="nav-item" id="nav-item-contact">
+                                <a href="/Contact" class="nav-link">Contact</a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        <div id="breadcrumb">
+            <div class="container">
+                <nav class="navbar navbar-expand-md" aria-label="Kruimelpad">
+                    <span class="breadcrumb-pre-text">
+                        U bevindt zich hier:
+                    </span>
+                    <ol class="breadcrumb mr-auto">
+                        <li class="breadcrumb-item">
+                            <a href="/">Home</a>
+                        </li>
+                        
+        <li class="breadcrumb-item">
+            <a href="/Reports">
+                Overzichten
+            </a>
+        </li>
+    <li class="breadcrumb-item active" aria-current="page">
+        Moties
+    </li>
+
+                    </ol>
+                    <div class="font-size">
+                        <ul>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.0" aria-label="Zet de tekst in de originele tekst grootte." aria-pressed="true">A</button>
+                            </li>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.2" aria-label="Vergroot de tekst met 20% ten opzichte van de originele tekst grootte." aria-pressed="false">A</button>
+                            </li>
+                            <li class="align-middle">
+                                <button type="button" data-size="1.4" aria-label="Vergroot de tekst met 40% ten opzichte van de originele tekst grootte." aria-pressed="false">A</button>
+                            </li>
+                        </ul>
+                    </div>
+                </nav>
+            </div>
+        </div>
+        <main id="content" class="d-flex">
+            <div class="container d-flex align-items-stretch flex-fill">
+                
+
+
+<div class="row maincontent sidecontent-left flex-fill" id="overzichten-maincontent">
+    <aside class="col-12 col-md-4 col-lg-3" id="sidecontent-left">
+        <a href="/Reports" class="backButton margin-bottom btn btn-ris">Terug naar overzichten</a>
+        <div class="filterWidget widget" id="filters">
+    <div class="widgetLabel">
+        <h1>Filters</h1>
+    </div>
+    <div class="widgetContent">
+        <ul id="filterLists" class="list-group">
+                <li class="list-group-item">
+                    <div class="form-group">
+
+
+                            <fieldset>
+                                <legend class="dateFilter">Datum</legend>
+                                <div class="input-daterange input-group" id="Filters_datum">
+    <label id="label_Filters_datum_from">vanaf</label>
+    <duet-date-picker class="input-sm datepicker from" language="nl" identifier="Filters_datum_from" name="Filters.datum_from" aria-labelledby="label_Filters_datum_from"
+                        data-filter-for="datum"   data-button-alt-text="Selecteer een datum vanaf"></duet-date-picker>
+    <label id="label_Filters_datum_to">Datum tot en met</label>
+    <duet-date-picker class="input-sm datepicker to" language="nl" identifier="Filters_datum_to" name="Filters.datum_to" aria-labelledby="label_Filters_datum_to"
+                        data-filter-for="datum"   data-button-alt-text="Selecteer een datum tot en met"></duet-date-picker>
+</div>
+<div class="hidden datefiltermessage" id="Filters_datum_message" aria-label="De ingevulde datums zijn niet correct">De ingevulde datums zijn niet correct</div>
+                            </fieldset>
+
+                    </div>
+                </li>
+                <li class="list-group-item">
+                    <div class="form-group">
+<label for="Filters_FilterFields_1__Value">Titel</label><input class="form-control textValue" data-filter-for="title" id="Filters_FilterFields_1__Value" name="Filters.FilterFields[1].Value" type="text" value="" />
+
+
+                    </div>
+                </li>
+                <li class="list-group-item">
+                    <div class="form-group">
+<label for="Filters_Indieners">Indieners</label><select class="form-control column-search-field" data-filter-for="raadsleden" id="Filters_Indieners" name="Filters.Indieners"><option value=""></option>
+<option value="36853a17-386a-40e7-a8b3-3878caa73a9b">Almelo Centraal</option>
+<option value="b23be00b-2168-4f45-872b-ebea57049939">CDA</option>
+<option value="96165437-cf9f-48c8-8421-bfce40bcc6f1">CU</option>
+<option value="f6bbd942-ce6f-44c2-8064-1e608740dd13">D.nu</option>
+<option value="1531591d-93b2-4137-8ddf-3e257f1629ec">D66</option>
+<option value="57b23d3b-776d-4cdc-9b2a-31faf9c1d80c">Forum voor Democratie</option>
+<option value="bb42343b-41c4-4c02-ad09-af7410518d19">Fractie Gelici</option>
+<option value="8a6b8cce-fb88-4861-a066-c9963b0c084e">Fractie Middelkamp</option>
+<option value="33da3047-f118-47fe-867f-ba2aa6e423aa">Groenlinks</option>
+<option value="2593e12d-6374-4d67-b1e8-962ffc5afb3e">LAS</option>
+<option value="fab67cdb-524b-4e05-a6f1-4f8b230afd61">Leefbaar Almelo</option>
+<option value="e66a6505-fa18-49ce-889f-04f3428695d9">Lijst &#199;ete</option>
+<option value="d206532c-af9f-490f-bfea-e8bb8e6bf8d6">Partij Vrij Almelo</option>
+<option value="a082364f-d38a-4fbc-8d16-8892e8d0203b">PvdA</option>
+<option value="d74fea1a-17fc-4b97-8ff1-9024d627bd5e">PVV</option>
+<option value="853e7cae-c473-40c9-863a-acd520829e4a">SP</option>
+<option value="fe64fdab-353c-4ed3-bd49-3624b2bea4bc">VVD</option>
+</select>
+
+
+                    </div>
+                </li>
+                <li class="list-group-item">
+                    <div class="form-group">
+<label for="Filters_Portefeuillehouder">Portefeuillehouder</label><select class="form-control column-search-field" data-filter-for="portefeuillehouder" id="Filters_Portefeuillehouder" name="Filters.Portefeuillehouder"><option value=""></option>
+<option value="5123905d-7dc0-4e9a-92b0-1bc958b3b8f2">Hinnen</option>
+<option value="39b800c0-e1e0-4374-955b-17c0d898a175">Overmeen-Bakhuis</option>
+<option value="92478094-450d-440d-af7c-67a929d00c13">Presidium</option>
+<option value="48739370-1c53-4ec7-b1d9-434e664a4241">R.T.A. Korteland</option>
+<option value="6f53f495-b57c-487c-ade3-980bca59fbef">v. Mierlo</option>
+<option value="e8e6ba23-8eec-4db8-b7c8-7784a047d196">v. Rees</option>
+</select>
+
+
+                    </div>
+                </li>
+                <li class="list-group-item">
+                    <div class="form-group">
+
+
+                            <fieldset>
+                                <legend class="dateFilter">Datum afdoening</legend>
+                                <div class="input-daterange input-group" id="Filters_datumafdoening">
+    <label id="label_Filters_datumafdoening_from">vanaf</label>
+    <duet-date-picker class="input-sm datepicker from" language="nl" identifier="Filters_datumafdoening_from" name="Filters.datumafdoening_from" aria-labelledby="label_Filters_datumafdoening_from"
+                        data-filter-for="datumafdoening"   data-button-alt-text="Selecteer een datum vanaf"></duet-date-picker>
+    <label id="label_Filters_datumafdoening_to">Datum tot en met</label>
+    <duet-date-picker class="input-sm datepicker to" language="nl" identifier="Filters_datumafdoening_to" name="Filters.datumafdoening_to" aria-labelledby="label_Filters_datumafdoening_to"
+                        data-filter-for="datumafdoening"   data-button-alt-text="Selecteer een datum tot en met"></duet-date-picker>
+</div>
+<div class="hidden datefiltermessage" id="Filters_datumafdoening_message" aria-label="De ingevulde datums zijn niet correct">De ingevulde datums zijn niet correct</div>
+                            </fieldset>
+
+                    </div>
+                </li>
+        </ul>
+    </div>
+    <div class="widgetFooter">
+        <button class="btn btn-ris" id="clear-filters" aria-label="Wis filters">Wis</button>
+    </div>
+</div>
+    </aside>
+    <section class="col-12 col-md-8 col-lg-9" id="maincontent">
+        <div class="row">
+            <div class="box col">
+                <div class="box-inner">
+                    <div class="box-header">
+                        <h1>Moties</h1>
+                    </div>
+                    <div class="box-content">
+                        <div id="overzichten">
+                            <input id="trueValueString" name="trueValueString" type="hidden" value="Ja" />
+                                <table   id="overzichten-data"             class="table table-condensed table-striped table-hover responsive  table-datatable table-clickable"
+           data-auto-width="false"
+           data-info="true"
+           data-paging="true"
+           data-page-length="50"
+           data-length-change="false"
+           data-responsive="false"
+           data-state-save="true"   data-state-duration="-1"             data-server-side="true"
+  data-ajax='{"url":"/Reports/GetReportData/2a3c7d48-696a-4a7b-8636-26b1a1b1199d","type":"POST"}'             data-columns='[{"data":"datum","name":"datum"},{"data":"title","name":"title"},{"data":"raadsleden","name":"raadsleden"},{"data":"portefeuillehouder","name":"portefeuillehouder"},{"data":"datumafdoening","name":"datumafdoening"}]'
+           data-column-render='[{"targets":0,"render":"renderStringColumn"},{"targets":1,"render":"renderStringColumn"},{"targets":2,"render":"renderStringColumn"},{"targets":3,"render":"renderStringColumn"},{"targets":4,"render":"renderStringColumn"}]'
+           data-order='[[0,"desc"]]'
+                                   data-item-url="/Reports/Item/_id_" data-item-modal="false"                        >
+        <thead>
+            <tr>
+                    <th data-order-sequence='["asc","desc"]'>
+                            Datum
+                    </th>
+                    <th data-order-sequence='["asc","desc"]'>
+                            Titel
+                    </th>
+                    <th data-order-sequence='["asc","desc"]'>
+                            Indieners
+                    </th>
+                    <th data-order-sequence='["asc","desc"]'>
+                            Portefeuillehouder
+                    </th>
+                    <th data-order-sequence='["asc","desc"]'>
+                            Datum afdoening
+                    </th>
+            </tr>
+        </thead>
+        <tbody>
+                <tr>
+                    <td colspan="5"><img src="/Images/throbber.gif" alt="Loading..." /></td>
+                </tr>
+        </tbody>
+    </table>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+
+            </div>
+        </main>
+                <footer id="footer-new">
+                    <div class="container">
+                        <div class="row justify-content-end align-items-start">
+                            <div class="box mb-0 col-md-auto">
+                                <div class="box-inner">
+                                    <div class="box-content p-0 py-1">
+                                        <ul class="list-group list-group-horizontal">
+                                            <li class="list-group-item">
+                                                <span>
+                                                    <a href="https://www.ibabs.com">
+                                                        iBabs Vergadermanagement
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                </span>
+                                            </li>
+                                            <li class="list-group-item">
+                                                <span>
+                                                    <a href=https://portal.ibabs.eu/>
+                                                        Inloggen
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                </span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+
+    </div>
+
+    <script src="/scripts/main?v=vm3etgvSlAyfw6tC1HnwMcGl8MfJG1x3yR3oxqTIjok1"></script>
+
+    <script src="/scripts/localization/nl?v=meRI3Lzz9Ko3fJUOcqRMr0B15-3iMzakUQ7OHp8nYy81"></script>
+
+    <script src="/Scripts/views/layout.js"></script>
+
+
+    <script type='module' src='/lib/duetds-datepicker/duet.esm.js'></script>
+
+    <script nomodule src='/lib/duetds-datepicker/duet.js'></script>
+
+
+    
+    <script type='module' src='/lib/react/main.bundle.js'></script>
+
+
+    
+
+    <script>
+        window.appBasePath = `/`;
+    </script>
+</body>
+</html>

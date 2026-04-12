@@ -1,0 +1,9 @@
+{
+  "municipality": "almelo",
+  "page_type": "meeting_list",
+  "source_url": "https://almelo.bestuurlijkeinformatie.nl/Calendar",
+  "fetched_at": "2026-04-11T00:00:00Z",
+  "portal_variant": "bestuurlijkeinformatie",
+  "description": "Meeting calendar overview listing upcoming and past council meetings for Almelo municipality",
+  "notes": "iBabs Publieksportaal — URL pattern: /Calendar"
+}
