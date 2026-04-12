@@ -2,7 +2,7 @@
   "municipality": "almelo",
   "page_type": "meeting_detail",
   "source_url": "https://almelo.bestuurlijkeinformatie.nl/Agenda/Index/55a2d355-2f35-4543-ae50-6d3576dd1275",
-  "fetched_at": "2026-04-11",
+  "fetched_at": "2026-04-11T00:00:00Z",
   "portal_variant": "bestuurlijkeinformatie",
   "description": "Detail page for a Raad (council meeting) on 1 April 2026, including agenda items and documents for Almelo",
   "notes": "iBabs Publieksportaal — URL pattern: /Agenda/Index/{uuid}"

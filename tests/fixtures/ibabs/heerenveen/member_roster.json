@@ -2,7 +2,7 @@
   "municipality": "heerenveen",
   "page_type": "member_roster",
   "source_url": "https://heerenveen.bestuurlijkeinformatie.nl/People",
-  "fetched_at": "2026-04-11",
+  "fetched_at": "2026-04-11T00:00:00Z",
   "portal_variant": "bestuurlijkeinformatie",
   "description": "Member roster ('Wie is wie') listing council members and their party affiliations for Heerenveen",
   "notes": "iBabs Publieksportaal — URL pattern: /People"
