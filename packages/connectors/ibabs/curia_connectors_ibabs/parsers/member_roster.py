@@ -15,6 +15,8 @@ _MEMBER_PATTERNS = (
     re.compile(r"/leden/?(\?|$)", re.IGNORECASE),
     re.compile(r"/raadsleden/?(\?|$)", re.IGNORECASE),
     re.compile(r"/commissieleden/?(\?|$)", re.IGNORECASE),
+    re.compile(r"/people/?(\?|$)", re.IGNORECASE),
+    re.compile(r"/people/profiles/[0-9a-f-]+/?(\?.*)?$", re.IGNORECASE),
 )
 
 
@@ -37,15 +39,17 @@ class IbabsMemberRosterParser(IbabsParser):
         warnings: list[str] = []
 
         # TODO: Confirm selectors against live portal HTML
-        rows = soup.select("table.members tbody tr, div.member-item, li.member-entry, div.raadslid")
+        rows = soup.select(
+            "table.members tbody tr, div.member-item, li.member-entry, div.raadslid, #categories .box.list-item"
+        )
 
         if not rows:
             warnings.append("No member rows found — CSS selectors may need updating")
 
         for row in rows:
-            name_el = row.select_one("td.member-name, span.member-name, h3.member-name, a.member-name")
+            name_el = row.select_one("td.member-name, span.member-name, h3.member-name, a.member-name, .heading1 a")
             party_el = row.select_one("td.party, span.party-name")
-            role_el = row.select_one("td.role, span.role")
+            role_el = row.select_one("td.role, span.role, .box-content-text")
             from_el = row.select_one("td.active-from, span.active-from")
             until_el = row.select_one("td.active-until, span.active-until")
             photo_el = row.select_one("img.photo, img.member-photo")
