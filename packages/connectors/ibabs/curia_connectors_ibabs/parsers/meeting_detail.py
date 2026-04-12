@@ -67,12 +67,8 @@ class IbabsMeetingDetailParser(IbabsParser):
         # TODO: Confirm agenda row selector against live portal
         agenda_rows = soup.select("div.agenda-item, tr.agenda-item, li.agenda-item")
         for idx, row in enumerate(agenda_rows, start=1):
-            item_title_el = row.select_one(
-                "span.panel-title-label, span.item-title, a.item-title, td.title"
-            )
-            item_desc_el = row.select_one(
-                "div.panel-body > div.row .col-12.text, div.item-description, td.description"
-            )
+            item_title_el = row.select_one("span.panel-title-label, span.item-title, a.item-title, td.title")
+            item_desc_el = row.select_one("div.panel-body > div.row .col-12.text, div.item-description, td.description")
             doc_anchors = row.select("ul.list-attachments a[href], a.document-link, a[href*='document']")
 
             item_title = self._extract_text(item_title_el, exclude_selectors=(".text-thin",)).rstrip(" -")

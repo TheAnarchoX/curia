@@ -47,9 +47,7 @@ class IbabsMemberRosterParser(IbabsParser):
             warnings.append("No member rows found — CSS selectors may need updating")
 
         for row in rows:
-            name_el = row.select_one(
-                "td.member-name, span.member-name, h3.member-name, a.member-name, .heading1 a"
-            )
+            name_el = row.select_one("td.member-name, span.member-name, h3.member-name, a.member-name, .heading1 a")
             party_el = row.select_one("td.party, span.party-name")
             role_el = row.select_one("td.role, span.role, .box-content-text")
             from_el = row.select_one("td.active-from, span.active-from")
