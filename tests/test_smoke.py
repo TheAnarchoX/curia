@@ -1,41 +1,54 @@
-"""Minimal smoke tests to keep CI green while the codebase is being bootstrapped."""
+"""Smoke tests for core package bootstrap paths."""
 
-from curia_connectors_eerstekamer.connector import EersteKamerConnector
-from curia_connectors_ibabs.config import IbabsSourceConfig
-from curia_connectors_ibabs.connector import IbabsConnector
-from curia_connectors_kiesraad.connector import KiesraadConnector
-from curia_connectors_ori.connector import OpenRaadsinformatieConnector
-from curia_connectors_tweedekamer.connector import TweedeKamerConnector
-from curia_connectors_woogle.connector import WoogleConnector
+from __future__ import annotations
 
-from apps.api.app.main import create_app
+from curia_domain.enums import GoverningBodyType, InstitutionType, JurisdictionLevel, MeetingStatus
+from curia_domain.models import GoverningBody, Institution, Jurisdiction, Meeting, Party, Politician
+from curia_ingestion.interfaces import SourceConnector
+from fastapi import FastAPI
 
 
-def test_create_app_builds_fastapi_application() -> None:
-    """The API application should build successfully."""
-    app = create_app()
-    assert app.title == "Curia API"
-
-
-def test_connector_metadata_smoke() -> None:
-    """Connector stubs should be importable and expose metadata."""
-    ibabs = IbabsConnector(
-        IbabsSourceConfig(
-            base_url="https://example.ibabs.eu",
-            municipality_slug="example-town",
-        )
+def test_domain_models_can_be_created() -> None:
+    """Core Pydantic domain models should build with minimal valid data."""
+    jurisdiction = Jurisdiction(
+        name="Amsterdam",
+        level=JurisdictionLevel.MUNICIPALITY,
     )
+    institution = Institution(
+        jurisdiction_id=jurisdiction.id,
+        name="Gemeenteraad Amsterdam",
+        slug="gemeenteraad-amsterdam",
+        institution_type=InstitutionType.COUNCIL,
+    )
+    governing_body = GoverningBody(
+        institution_id=institution.id,
+        name="Raad",
+        body_type=GoverningBodyType.COUNCIL,
+    )
+    meeting = Meeting(
+        governing_body_id=governing_body.id,
+        title="Raadsvergadering",
+    )
+    party = Party(name="Voorbeeldpartij")
+    politician = Politician(full_name="Jane Doe")
 
-    connectors = [
-        ibabs,
-        TweedeKamerConnector(),
-        OpenRaadsinformatieConnector(),
-        KiesraadConnector(),
-        WoogleConnector(),
-        EersteKamerConnector(),
-    ]
+    assert meeting.status is MeetingStatus.SCHEDULED
+    assert party.aliases == []
+    assert politician.full_name == "Jane Doe"
 
-    source_types = {connector.get_meta().source_type for connector in connectors}
+
+def test_create_app_builds_fastapi_application(api_app: FastAPI) -> None:
+    """The API application should build successfully."""
+    assert api_app.title == "Curia API"
+    assert api_app.debug is True
+    assert "/health" in {route.path for route in api_app.routes}
+    assert any(route.path.startswith("/api/v1/") for route in api_app.routes)
+
+
+def test_connector_metadata_smoke(connector_instances: list[SourceConnector]) -> None:
+    """Connector implementations should instantiate and expose metadata."""
+    source_types = {connector.get_meta().source_type for connector in connector_instances}
+
     assert source_types == {
         "ibabs",
         "tweedekamer",
