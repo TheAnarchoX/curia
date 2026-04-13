@@ -62,6 +62,12 @@ class IbabsConnector(SourceConnector):
             incremental_sections = [section for section, _ in urls_by_section if section in INCREMENTAL_SYNC_SECTIONS]
             if incremental_sections:
                 urls_by_section_lookup = dict(urls_by_section)
+                processed_urls = self._checkpoint.get("processed_urls")
+                processed_url_set = (
+                    {url for url in processed_urls if isinstance(url, str)}
+                    if isinstance(processed_urls, list)
+                    else set()
+                )
                 incremental_urls_by_section = {
                     section: self._apply_page_offset(
                         urljoin(base.rstrip("/") + "/", self._config.custom_paths[section].lstrip("/")),
@@ -73,6 +79,11 @@ class IbabsConnector(SourceConnector):
                     incremental_urls_by_section.get(section, urls_by_section_lookup[section])
                     for section in incremental_sections
                 ]
+                urls.extend(
+                    seed_url
+                    for section, seed_url in urls_by_section
+                    if section not in incremental_sections and seed_url not in processed_url_set
+                )
 
         # If a checkpoint records the last-seen page for pagination, resume
         last_meetings_page = self._checkpoint.get("last_meetings_page_url")

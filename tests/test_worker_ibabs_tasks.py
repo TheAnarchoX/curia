@@ -342,8 +342,8 @@ def test_pipeline_logs_page_errors_without_blocking_later_pages(
     )
 
 
-def test_discover_pages_keeps_unsynced_incremental_sections_when_checkpoint_is_partial() -> None:
-    """Partial incremental checkpoints should still schedule missing incremental sections."""
+def test_discover_pages_keeps_unsynced_sections_when_checkpoint_is_partial() -> None:
+    """Partial checkpoints should keep unsynced sections in the discovered seed list."""
     state = _resolve_ibabs_sync_state(
         source_id=str(uuid.uuid4()),
         municipality_slug="almelo",
@@ -357,9 +357,11 @@ def test_discover_pages_keeps_unsynced_incremental_sections_when_checkpoint_is_p
 
     urls = asyncio.run(_discover_ibabs_pages(state))
 
-    assert len(urls) == 2
+    assert len(urls) == 4
     assert "https://almelo.bestuurlijkeinformatie.nl/meetings?page=2" in urls
     assert "https://almelo.bestuurlijkeinformatie.nl/reports" in urls
+    assert "https://almelo.bestuurlijkeinformatie.nl/parties" in urls
+    assert "https://almelo.bestuurlijkeinformatie.nl/members" in urls
 
 
 def test_persist_page_reuses_single_session_for_checkpoint_write(
