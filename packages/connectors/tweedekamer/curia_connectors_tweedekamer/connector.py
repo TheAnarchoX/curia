@@ -32,7 +32,7 @@ ENTITIES = (
     "Fractie",
     "FractieZetel",
     "Commissie",
-    "CommissieLid",
+    "CommissieZetel",
     "Vergadering",
     "Zaak",
     "ZaakActor",

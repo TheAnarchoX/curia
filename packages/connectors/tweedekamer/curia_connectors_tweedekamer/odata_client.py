@@ -40,87 +40,225 @@ class Persoon(ODataEntity):
 
 
 class Fractie(ODataEntity):
-    """Typed OData model for the Fractie entity set with shared OData fields only."""
+    """Typed OData model for the Fractie entity set."""
 
-    pass
+    nummer: int | None = Field(default=None, alias="Nummer")
+    afkorting: str | None = Field(default=None, alias="Afkorting")
+    naam_nl: str | None = Field(default=None, alias="NaamNL")
+    naam_en: str | None = Field(default=None, alias="NaamEN")
+    aantal_zetels: int | None = Field(default=None, alias="AantalZetels")
+    aantal_stemmen: int | None = Field(default=None, alias="AantalStemmen")
+    datum_actief: datetime | None = Field(default=None, alias="DatumActief")
+    datum_inactief: datetime | None = Field(default=None, alias="DatumInactief")
+    content_type: str | None = Field(default=None, alias="ContentType")
+    content_length: int | None = Field(default=None, alias="ContentLength")
 
 
 class FractieZetel(ODataEntity):
-    """Typed OData model for the FractieZetel entity set with shared OData fields only."""
+    """Typed OData model for the FractieZetel entity set."""
 
-    pass
+    gewicht: int | None = Field(default=None, alias="Gewicht")
+    fractie_id: UUID | None = Field(default=None, alias="Fractie_Id")
 
 
 class Commissie(ODataEntity):
-    """Typed OData model for the Commissie entity set with shared OData fields only."""
+    """Typed OData model for the Commissie entity set."""
 
-    pass
+    nummer: int | None = Field(default=None, alias="Nummer")
+    soort: str | None = Field(default=None, alias="Soort")
+    afkorting: str | None = Field(default=None, alias="Afkorting")
+    naam_nl: str | None = Field(default=None, alias="NaamNL")
+    naam_en: str | None = Field(default=None, alias="NaamEN")
+    naam_web_nl: str | None = Field(default=None, alias="NaamWebNL")
+    naam_web_en: str | None = Field(default=None, alias="NaamWebEN")
+    inhoudsopgave: str | None = Field(default=None, alias="Inhoudsopgave")
+    datum_actief: datetime | None = Field(default=None, alias="DatumActief")
+    datum_inactief: datetime | None = Field(default=None, alias="DatumInactief")
 
 
-class CommissieLid(ODataEntity):
-    """Typed OData model for the CommissieLid entity set with shared OData fields only."""
+class CommissieZetel(ODataEntity):
+    """Typed OData model for the CommissieZetel entity set."""
 
-    pass
+    gewicht: int | None = Field(default=None, alias="Gewicht")
+    commissie_id: UUID | None = Field(default=None, alias="Commissie_Id")
 
 
 class Vergadering(ODataEntity):
-    """Typed OData model for the Vergadering entity set with shared OData fields only."""
+    """Typed OData model for the Vergadering entity set."""
 
-    pass
+    soort: str | None = Field(default=None, alias="Soort")
+    titel: str | None = Field(default=None, alias="Titel")
+    zaal: str | None = Field(default=None, alias="Zaal")
+    vergaderjaar: str | None = Field(default=None, alias="Vergaderjaar")
+    vergadering_nummer: int | None = Field(default=None, alias="VergaderingNummer")
+    datum: datetime | None = Field(default=None, alias="Datum")
+    aanvangstijd: datetime | None = Field(default=None, alias="Aanvangstijd")
+    sluiting: datetime | None = Field(default=None, alias="Sluiting")
+    kamer: str | None = Field(default=None, alias="Kamer")
 
 
 class Zaak(ODataEntity):
-    """Typed OData model for the Zaak entity set with shared OData fields only."""
+    """Typed OData model for the Zaak entity set."""
 
-    pass
+    nummer: str | None = Field(default=None, alias="Nummer")
+    soort: str | None = Field(default=None, alias="Soort")
+    titel: str | None = Field(default=None, alias="Titel")
+    citeertitel: str | None = Field(default=None, alias="Citeertitel")
+    alias: str | None = Field(default=None, alias="Alias")
+    status: str | None = Field(default=None, alias="Status")
+    onderwerp: str | None = Field(default=None, alias="Onderwerp")
+    gestart_op: datetime | None = Field(default=None, alias="GestartOp")
+    organisatie: str | None = Field(default=None, alias="Organisatie")
+    grondslag_voorhang: str | None = Field(default=None, alias="Grondslagvoorhang")
+    termijn: datetime | None = Field(default=None, alias="Termijn")
+    vergaderjaar: str | None = Field(default=None, alias="Vergaderjaar")
+    volgnummer: int | None = Field(default=None, alias="Volgnummer")
+    huidige_behandelstatus: str | None = Field(default=None, alias="HuidigeBehandelstatus")
+    afgedaan: bool | None = Field(default=None, alias="Afgedaan")
+    groot_project: bool | None = Field(default=None, alias="GrootProject")
+    kabinetsappreciatie: str | None = Field(default=None, alias="Kabinetsappreciatie")
 
 
 class ZaakActor(ODataEntity):
-    """Typed OData model for the ZaakActor entity set with shared OData fields only."""
+    """Typed OData model for the ZaakActor entity set."""
 
-    pass
+    zaak_id: UUID | None = Field(default=None, alias="Zaak_Id")
+    actor_naam: str | None = Field(default=None, alias="ActorNaam")
+    actor_fractie: str | None = Field(default=None, alias="ActorFractie")
+    actor_afkorting: str | None = Field(default=None, alias="ActorAfkorting")
+    functie: str | None = Field(default=None, alias="Functie")
+    relatie: str | None = Field(default=None, alias="Relatie")
+    sid_actor: str | None = Field(default=None, alias="SidActor")
+    persoon_id: UUID | None = Field(default=None, alias="Persoon_Id")
+    fractie_id: UUID | None = Field(default=None, alias="Fractie_Id")
+    commissie_id: UUID | None = Field(default=None, alias="Commissie_Id")
 
 
 class Document(ODataEntity):
-    """Typed OData model for the Document entity set with shared OData fields only."""
+    """Typed OData model for the Document entity set."""
 
-    pass
+    soort: str | None = Field(default=None, alias="Soort")
+    document_nummer: str | None = Field(default=None, alias="DocumentNummer")
+    titel: str | None = Field(default=None, alias="Titel")
+    onderwerp: str | None = Field(default=None, alias="Onderwerp")
+    datum: datetime | None = Field(default=None, alias="Datum")
+    vergaderjaar: str | None = Field(default=None, alias="Vergaderjaar")
+    kamer: int | None = Field(default=None, alias="Kamer")
+    volgnummer: int | None = Field(default=None, alias="Volgnummer")
+    citeertitel: str | None = Field(default=None, alias="Citeertitel")
+    alias: str | None = Field(default=None, alias="Alias")
+    datum_registratie: datetime | None = Field(default=None, alias="DatumRegistratie")
+    datum_ontvangst: datetime | None = Field(default=None, alias="DatumOntvangst")
+    aanhangselnummer: str | None = Field(default=None, alias="Aanhangselnummer")
+    kenmerk_afzender: str | None = Field(default=None, alias="KenmerkAfzender")
+    organisatie: str | None = Field(default=None, alias="Organisatie")
+    content_type: str | None = Field(default=None, alias="ContentType")
+    content_length: int | None = Field(default=None, alias="ContentLength")
+    huidige_document_versie_id: UUID | None = Field(default=None, alias="HuidigeDocumentVersie_Id")
 
 
 class DocumentActor(ODataEntity):
-    """Typed OData model for the DocumentActor entity set with shared OData fields only."""
+    """Typed OData model for the DocumentActor entity set."""
 
-    pass
+    document_id: UUID | None = Field(default=None, alias="Document_Id")
+    actor_naam: str | None = Field(default=None, alias="ActorNaam")
+    actor_fractie: str | None = Field(default=None, alias="ActorFractie")
+    functie: str | None = Field(default=None, alias="Functie")
+    relatie: str | None = Field(default=None, alias="Relatie")
+    sid_actor: str | None = Field(default=None, alias="SidActor")
+    persoon_id: UUID | None = Field(default=None, alias="Persoon_Id")
+    fractie_id: UUID | None = Field(default=None, alias="Fractie_Id")
+    commissie_id: UUID | None = Field(default=None, alias="Commissie_Id")
 
 
 class Stemming(ODataEntity):
-    """Typed OData model for the Stemming entity set with shared OData fields only."""
+    """Typed OData model for the Stemming entity set."""
 
-    pass
+    besluit_id: UUID | None = Field(default=None, alias="Besluit_Id")
+    soort: str | None = Field(default=None, alias="Soort")
+    fractie_grootte: int | None = Field(default=None, alias="FractieGrootte")
+    actor_naam: str | None = Field(default=None, alias="ActorNaam")
+    actor_fractie: str | None = Field(default=None, alias="ActorFractie")
+    vergissing: bool | None = Field(default=None, alias="Vergissing")
+    sid_actor_lid: str | None = Field(default=None, alias="SidActorLid")
+    sid_actor_fractie: str | None = Field(default=None, alias="SidActorFractie")
+    persoon_id: UUID | None = Field(default=None, alias="Persoon_Id")
+    fractie_id: UUID | None = Field(default=None, alias="Fractie_Id")
 
 
 class Besluit(ODataEntity):
-    """Typed OData model for the Besluit entity set with shared OData fields only."""
+    """Typed OData model for the Besluit entity set."""
 
-    pass
+    agendapunt_id: UUID | None = Field(default=None, alias="Agendapunt_Id")
+    stemmings_soort: str | None = Field(default=None, alias="StemmingsSoort")
+    besluit_soort: str | None = Field(default=None, alias="BesluitSoort")
+    besluit_tekst: str | None = Field(default=None, alias="BesluitTekst")
+    opmerking: str | None = Field(default=None, alias="Opmerking")
+    status: str | None = Field(default=None, alias="Status")
+    agendapunt_zaak_besluit_volgorde: int | None = Field(default=None, alias="AgendapuntZaakBesluitVolgorde")
 
 
 class Agendapunt(ODataEntity):
-    """Typed OData model for the Agendapunt entity set with shared OData fields only."""
+    """Typed OData model for the Agendapunt entity set."""
 
-    pass
+    nummer: str | None = Field(default=None, alias="Nummer")
+    onderwerp: str | None = Field(default=None, alias="Onderwerp")
+    aanvangstijd: datetime | None = Field(default=None, alias="Aanvangstijd")
+    eindtijd: datetime | None = Field(default=None, alias="Eindtijd")
+    volgorde: int | None = Field(default=None, alias="Volgorde")
+    rubriek: str | None = Field(default=None, alias="Rubriek")
+    noot: str | None = Field(default=None, alias="Noot")
+    status: str | None = Field(default=None, alias="Status")
+    activiteit_id: UUID | None = Field(default=None, alias="Activiteit_Id")
 
 
 class Activiteit(ODataEntity):
-    """Typed OData model for the Activiteit entity set with shared OData fields only."""
+    """Typed OData model for the Activiteit entity set."""
 
-    pass
+    soort: str | None = Field(default=None, alias="Soort")
+    nummer: str | None = Field(default=None, alias="Nummer")
+    onderwerp: str | None = Field(default=None, alias="Onderwerp")
+    datum_soort: str | None = Field(default=None, alias="DatumSoort")
+    datum: datetime | None = Field(default=None, alias="Datum")
+    aanvangstijd: datetime | None = Field(default=None, alias="Aanvangstijd")
+    eindtijd: datetime | None = Field(default=None, alias="Eindtijd")
+    locatie: str | None = Field(default=None, alias="Locatie")
+    besloten: bool | None = Field(default=None, alias="Besloten")
+    status: str | None = Field(default=None, alias="Status")
+    vergaderjaar: str | None = Field(default=None, alias="Vergaderjaar")
+    kamer: str | None = Field(default=None, alias="Kamer")
+    noot: str | None = Field(default=None, alias="Noot")
+    vrs_nummer: str | None = Field(default=None, alias="VRSNummer")
+    sid_voortouw: str | None = Field(default=None, alias="SidVoortouw")
+    voortouw_naam: str | None = Field(default=None, alias="Voortouwnaam")
+    voortouw_afkorting: str | None = Field(default=None, alias="Voortouwafkorting")
+    voortouw_kortenaam: str | None = Field(default=None, alias="Voortouwkortenaam")
+    voortouwcommissie_id: UUID | None = Field(default=None, alias="Voortouwcommissie_Id")
+    aanvraagdatum: datetime | None = Field(default=None, alias="Aanvraagdatum")
+    datum_verzoek_eerste_verlenging: datetime | None = Field(default=None, alias="DatumVerzoekEersteVerlenging")
+    datum_mededeling_eerste_verlenging: datetime | None = Field(
+        default=None,
+        alias="DatumMededelingEersteVerlenging",
+    )
+    datum_verzoek_tweede_verlenging: datetime | None = Field(default=None, alias="DatumVerzoekTweedeVerlenging")
+    datum_mededeling_tweede_verlenging: datetime | None = Field(
+        default=None,
+        alias="DatumMededelingTweedeVerlenging",
+    )
+    vervaldatum: datetime | None = Field(default=None, alias="Vervaldatum")
 
 
 class Kamerstukdossier(ODataEntity):
-    """Typed OData model for the Kamerstukdossier entity set with shared OData fields only."""
+    """Typed OData model for the Kamerstukdossier entity set."""
 
-    pass
+    titel: str | None = Field(default=None, alias="Titel")
+    citeertitel: str | None = Field(default=None, alias="Citeertitel")
+    alias: str | None = Field(default=None, alias="Alias")
+    nummer: int | None = Field(default=None, alias="Nummer")
+    toevoeging: str | None = Field(default=None, alias="Toevoeging")
+    hoogste_volgnummer: int | None = Field(default=None, alias="HoogsteVolgnummer")
+    afgesloten: bool | None = Field(default=None, alias="Afgesloten")
+    kamer: str | None = Field(default=None, alias="Kamer")
 
 
 ENTITY_SET_MODELS: dict[str, type[ODataEntity]] = {
@@ -128,7 +266,7 @@ ENTITY_SET_MODELS: dict[str, type[ODataEntity]] = {
     "Fractie": Fractie,
     "FractieZetel": FractieZetel,
     "Commissie": Commissie,
-    "CommissieLid": CommissieLid,
+    "CommissieZetel": CommissieZetel,
     "Vergadering": Vergadering,
     "Zaak": Zaak,
     "ZaakActor": ZaakActor,
@@ -216,10 +354,7 @@ class ODataClient:
             response = await self._client.get(next_url, params=params)
             response.raise_for_status()
             payload = response.json()
-            page_items = [
-                cast(TEntity, model_type.model_validate(raw_item))
-                for raw_item in payload.get("value", [])
-            ]
+            page_items = [cast(TEntity, model_type.model_validate(raw_item)) for raw_item in payload.get("value", [])]
             items.extend(page_items)
             next_link = payload.get("@odata.nextLink")
             if isinstance(next_link, str):
@@ -249,9 +384,13 @@ class ODataClient:
         """Fetch Commissie entities."""
         return await self.fetch_entities("Commissie", model=Commissie, **kwargs)
 
-    async def list_commissielid(self, **kwargs: Unpack[QueryOptions]) -> list[CommissieLid]:
-        """Fetch CommissieLid entities."""
-        return await self.fetch_entities("CommissieLid", model=CommissieLid, **kwargs)
+    async def list_commissiezetel(self, **kwargs: Unpack[QueryOptions]) -> list[CommissieZetel]:
+        """Fetch CommissieZetel entities."""
+        return await self.fetch_entities("CommissieZetel", model=CommissieZetel, **kwargs)
+
+    async def list_commissielid(self, **kwargs: Unpack[QueryOptions]) -> list[CommissieZetel]:
+        """Fetch CommissieZetel entities via the older CommissieLid name."""
+        return await self.list_commissiezetel(**kwargs)
 
     async def list_vergadering(self, **kwargs: Unpack[QueryOptions]) -> list[Vergadering]:
         """Fetch Vergadering entities."""
@@ -343,12 +482,16 @@ class ODataClient:
             raise ValueError(msg) from exc
 
 
+CommissieLid = CommissieZetel
+
+
 __all__ = [
     "Agendapunt",
     "Activiteit",
     "Besluit",
     "Commissie",
     "CommissieLid",
+    "CommissieZetel",
     "DEFAULT_BASE_URL",
     "Document",
     "DocumentActor",
