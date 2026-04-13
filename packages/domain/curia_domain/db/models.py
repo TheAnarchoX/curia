@@ -116,7 +116,10 @@ class PartyRow(TimestampMixin, Base):
     active_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     active_until: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    __table_args__ = (Index("ix_parties_abbreviation", "abbreviation"),)
+    __table_args__ = (
+        Index("ix_parties_abbreviation", "abbreviation"),
+        Index("ix_parties_name", "name", unique=True),
+    )
 
 
 class PoliticianRow(TimestampMixin, Base):
@@ -202,6 +205,7 @@ class MeetingRow(TimestampMixin, Base):
         Index("ix_meetings_governing_body_id", "governing_body_id"),
         Index("ix_meetings_status", "status"),
         Index("ix_meetings_scheduled_start", "scheduled_start"),
+        Index("ix_meetings_source_url", "source_url", unique=True, postgresql_where="source_url IS NOT NULL"),
     )
 
 
@@ -281,6 +285,7 @@ class DocumentRow(TimestampMixin, Base):
         Index("ix_documents_document_type", "document_type"),
         Index("ix_documents_meeting_id", "meeting_id"),
         Index("ix_documents_content_hash", "content_hash"),
+        Index("ix_documents_source_url", "source_url", unique=True, postgresql_where="source_url IS NOT NULL"),
     )
 
 

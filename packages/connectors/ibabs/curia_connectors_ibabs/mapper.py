@@ -1,6 +1,30 @@
-"""Mapper from iBabs source models to canonical assertion data."""
+"""Mapper from iBabs source models to canonical assertion data and ORM persistence."""
 
 from __future__ import annotations
+
+import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from curia_domain.db.models import (
+    DecisionRow,
+    DocumentRow,
+    MeetingRow,
+    MotionRow,
+    PartyRow,
+    PoliticianRow,
+    VoteRow,
+)
+from curia_domain.enums import (
+    DecisionType,
+    DocumentType,
+    MeetingStatus,
+    PropositionStatus,
+)
+from curia_ingestion.interfaces import ParsedEntity, ParseResult
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from curia_connectors_ibabs.models.pages import (
     IbabsAgendaItem,
@@ -12,6 +36,334 @@ from curia_connectors_ibabs.models.pages import (
     IbabsReportEntry,
     IbabsSpeakerEvent,
 )
+
+# ---------------------------------------------------------------------------
+# Result container
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EntityMapResult:
+    """Outcome of mapping and persisting a batch of parsed entities."""
+
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class _MissingKey(Exception):
+    """Raised when a required natural key is missing from entity data."""
+
+
+def _require_key(data: dict[str, object], key: str, label: str) -> str:
+    """Return a non-empty string value for *key* or raise ``_MissingKey``."""
+    value = data.get(key)
+    if not value or not isinstance(value, str) or not value.strip():
+        raise _MissingKey(f"Missing required key '{key}' for {label}")
+    return value.strip()
+
+
+# ---------------------------------------------------------------------------
+# Entity mapper — ParseResult → ORM rows
+# ---------------------------------------------------------------------------
+
+
+class IbabsEntityMapper:
+    """Convert parsed iBabs entities into SQLAlchemy ORM rows and persist them.
+
+    Each entity type has an ``_upsert_*`` handler that looks up an existing
+    row by a natural key (e.g. party name, meeting source URL) and either
+    creates a new row or updates the existing one.  This ensures re-crawling
+    the same pages does not produce duplicate records.
+
+    After each successful insert the session is flushed so that subsequent
+    selects within the same batch can see newly created rows and so that
+    DB-level constraint violations are caught per-entity rather than aborting
+    the entire batch.
+    """
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        governing_body_id: uuid.UUID,
+    ) -> None:
+        """Initialise the mapper with an async session and governing body context."""
+        self._session = session
+        self._governing_body_id = governing_body_id
+        self._handlers: dict[str, Callable[[ParsedEntity], Awaitable[bool]]] = {
+            "party_roster": self._upsert_party,
+            "member_roster": self._upsert_politician,
+            "meeting_summary": self._upsert_meeting,
+            "meeting_detail": self._upsert_meeting,
+            "report": self._upsert_document,
+            "document_link": self._upsert_document,
+            "motion": self._upsert_motion,
+            "vote": self._upsert_vote,
+        }
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def map_and_persist(self, parse_result: ParseResult) -> EntityMapResult:
+        """Map every entity in *parse_result* to ORM rows and persist them."""
+        result = EntityMapResult()
+
+        for entity in parse_result.entities:
+            handler = self._handlers.get(entity.entity_type)
+            if handler is None:
+                result.skipped += 1
+                continue
+
+            try:
+                created = await handler(entity)
+                # Flush after each entity so that subsequent selects see
+                # newly inserted rows and DB constraint errors surface
+                # inside the per-entity try/except.
+                await self._session.flush()
+                if created:
+                    result.created += 1
+                else:
+                    result.updated += 1
+            except _MissingKey as exc:
+                result.skipped += 1
+                result.errors.append(f"Skipped {entity.entity_type} ({entity.external_id}): {exc}")
+            except Exception as exc:  # noqa: BLE001
+                result.errors.append(f"Error mapping {entity.entity_type} ({entity.external_id}): {exc}")
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Party
+    # ------------------------------------------------------------------
+
+    async def _upsert_party(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        name = _require_key(data, "party_name", "party")
+
+        stmt = select(PartyRow).where(PartyRow.name == name)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        if row is None:
+            row = PartyRow(
+                name=name,
+                abbreviation=data.get("abbreviation"),
+            )
+            self._session.add(row)
+            return True
+
+        if data.get("abbreviation"):
+            row.abbreviation = data["abbreviation"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Politician
+    # ------------------------------------------------------------------
+
+    async def _upsert_politician(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        full_name = _require_key(data, "name", "politician")
+
+        stmt = select(PoliticianRow).where(PoliticianRow.full_name == full_name)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        if row is None:
+            row = PoliticianRow(
+                full_name=full_name,
+                notes=data.get("role"),
+            )
+            self._session.add(row)
+            return True
+
+        if data.get("role"):
+            row.notes = data["role"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Meeting
+    # ------------------------------------------------------------------
+
+    async def _upsert_meeting(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        source_url = _require_key(data, "url", "meeting")
+
+        stmt = select(MeetingRow).where(MeetingRow.source_url == source_url)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        date_value: str | None = data.get("date")
+        scheduled_start = self._parse_datetime(date_value)
+        status = data.get("status", MeetingStatus.SCHEDULED)
+
+        if row is None:
+            row = MeetingRow(
+                governing_body_id=self._governing_body_id,
+                title=data.get("title"),
+                scheduled_start=scheduled_start,
+                location=data.get("location"),
+                source_url=source_url,
+                status=status,
+            )
+            self._session.add(row)
+            return True
+
+        if data.get("title"):
+            row.title = data["title"]
+        if scheduled_start:
+            row.scheduled_start = scheduled_start
+        if data.get("location"):
+            row.location = data["location"]
+        if data.get("status"):
+            row.status = data["status"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Document (report / document link)
+    # ------------------------------------------------------------------
+
+    async def _upsert_document(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        source_url = _require_key(data, "url", "document")
+
+        stmt = select(DocumentRow).where(DocumentRow.source_url == source_url)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        doc_type = DocumentType.REPORT if entity.entity_type == "report" else DocumentType.OTHER
+
+        if row is None:
+            row = DocumentRow(
+                title=data.get("title"),
+                document_type=doc_type,
+                source_url=source_url,
+                mime_type=data.get("mime_type"),
+            )
+            self._session.add(row)
+            return True
+
+        if data.get("title"):
+            row.title = data["title"]
+        if data.get("mime_type"):
+            row.mime_type = data["mime_type"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Motion
+    # ------------------------------------------------------------------
+
+    async def _upsert_motion(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        title = _require_key(data, "title", "motion")
+
+        stmt = select(MotionRow).where(MotionRow.title == title)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        if row is None:
+            row = MotionRow(
+                title=title,
+                body=data.get("body"),
+                status=data.get("status", PropositionStatus.SUBMITTED),
+            )
+            self._session.add(row)
+            return True
+
+        if data.get("body"):
+            row.body = data["body"]
+        if data.get("status"):
+            row.status = data["status"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Vote
+    # ------------------------------------------------------------------
+
+    async def _upsert_vote(self, entity: ParsedEntity) -> bool:
+        data = entity.data
+        meeting_source_url = _require_key(data, "meeting_source_url", "vote")
+
+        # Resolve the meeting this vote belongs to.
+        stmt = select(MeetingRow).where(
+            MeetingRow.source_url == meeting_source_url,
+        )
+        meeting_row = (await self._session.execute(stmt)).scalar_one_or_none()
+
+        if meeting_row is None:
+            raise ValueError(
+                f"Cannot persist vote without a linked meeting (meeting_source_url={meeting_source_url!r})"
+            )
+
+        # Get or create a Decision for this vote.
+        stmt_dec = select(DecisionRow).where(
+            DecisionRow.meeting_id == meeting_row.id,
+            DecisionRow.description == data.get("description", ""),
+        )
+        decision = (await self._session.execute(stmt_dec)).scalar_one_or_none()
+
+        if decision is None:
+            decision = DecisionRow(
+                meeting_id=meeting_row.id,
+                decision_type=DecisionType.VOTE,
+                outcome=data.get("outcome"),
+                description=data.get("description", ""),
+            )
+            self._session.add(decision)
+            await self._session.flush()
+
+        # Upsert the vote itself.
+        stmt_vote = select(VoteRow).where(
+            VoteRow.decision_id == decision.id,
+        )
+        vote_row = (await self._session.execute(stmt_vote)).scalar_one_or_none()
+
+        if vote_row is None:
+            vote_row = VoteRow(
+                decision_id=decision.id,
+                outcome=data.get("outcome"),
+                votes_for=data.get("votes_for"),
+                votes_against=data.get("votes_against"),
+                votes_abstain=data.get("votes_abstain"),
+            )
+            self._session.add(vote_row)
+            return True
+
+        # Only update fields that are explicitly present in data to avoid
+        # overwriting previously stored values with None on partial re-crawls.
+        if "outcome" in data:
+            vote_row.outcome = data["outcome"]
+        if "votes_for" in data:
+            vote_row.votes_for = data["votes_for"]
+        if "votes_against" in data:
+            vote_row.votes_against = data["votes_against"]
+        if "votes_abstain" in data:
+            vote_row.votes_abstain = data["votes_abstain"]
+        return False
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_datetime(value: str | None) -> datetime | None:
+        """Best-effort ISO-8601 datetime/date parsing.
+
+        Always returns a timezone-aware datetime (UTC) to satisfy
+        PostgreSQL ``timestamptz`` columns, or ``None`` when the input
+        cannot be parsed.
+        """
+        if not value:
+            return None
+        try:
+            dt = datetime.fromisoformat(value)
+        except (ValueError, TypeError):
+            return None
+        # Normalise naive datetimes (e.g. date-only "2024-01-15") to UTC.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
 
 
 class IbabsCanonicalMapper:
