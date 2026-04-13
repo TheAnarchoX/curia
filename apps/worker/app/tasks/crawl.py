@@ -203,10 +203,10 @@ def _extract_page_offset(url: str) -> dict[str, int | str]:
         if value in (None, ""):
             continue
         try:
-            parsed_value: int | str = int(value)
+            offset_value: int | str = int(value)
         except ValueError:
-            parsed_value = value
-        return {"param": param, "value": parsed_value}
+            offset_value = value
+        return {"param": param, "value": offset_value}
 
     return {"param": "page", "value": 0}
 
@@ -246,9 +246,13 @@ async def _persist_checkpoint_async(sync_state: dict[str, Any]) -> None:
     if not checkpoint:
         return
 
+    source_id_value = sync_state.get("source_id")
+    if not isinstance(source_id_value, (str, uuid.UUID)):
+        return
+
     try:
-        source_id = uuid.UUID(str(sync_state["source_id"]))
-    except (KeyError, TypeError, ValueError):
+        source_id = uuid.UUID(source_id_value) if isinstance(source_id_value, str) else source_id_value
+    except ValueError:
         return
 
     async with async_session_factory() as session:

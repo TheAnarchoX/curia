@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 import uuid
 from collections.abc import Generator
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import curia_domain.db.models as _models  # noqa: F401
 import pytest
@@ -51,18 +52,19 @@ def _patch_sqlite_type_compiler() -> Generator[None, None, None]:
 
 @pytest.fixture
 def sqlite_session_factory() -> Generator[async_sessionmaker[AsyncSession], None, None]:
-    """Yield an async session factory backed by in-memory SQLite."""
-    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    """Yield an async session factory backed by a temporary SQLite database file."""
+    with tempfile.NamedTemporaryFile(suffix=".db") as db_file:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_file.name}", echo=False)
 
-    async def _create_schema() -> None:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        async def _create_schema() -> None:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
 
-    asyncio.run(_create_schema())
+        asyncio.run(_create_schema())
 
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    yield factory
-    asyncio.run(engine.dispose())
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        yield factory
+        asyncio.run(engine.dispose())
 
 
 def _sync_state() -> dict[str, Any]:
@@ -357,7 +359,10 @@ def test_sync_source_persists_checkpoint_and_discovers_fewer_pages_on_rerun(
 
     async def load_source_row() -> SourceRow | None:
         async with sqlite_session_factory() as session:
-            return await session.scalar(select(SourceRow).where(SourceRow.id == source_id))
+            return cast(
+                SourceRow | None,
+                await session.scalar(select(SourceRow).where(SourceRow.id == source_id)),
+            )
 
     persisted_source = asyncio.run(load_source_row())
     assert persisted_source is not None

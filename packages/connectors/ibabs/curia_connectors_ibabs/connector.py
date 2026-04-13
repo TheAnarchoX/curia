@@ -166,7 +166,7 @@ class IbabsConnector(SourceConnector):
 
         param = offset_data.get("param")
         value = offset_data.get("value")
-        if not isinstance(param, str) or param == "" or value in (None, "", 0, "0"):
+        if not isinstance(param, str) or param == "" or value in (None, ""):
             return url
 
         parsed = urlparse(url)
