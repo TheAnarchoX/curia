@@ -304,8 +304,10 @@ class ODataClient:
         timeout_seconds: float = 30.0,
     ) -> None:
         """Initialize the client with an optional shared AsyncClient."""
-        self._base_url = base_url.rstrip("/") + "/"
         self._owns_client = http_client is None
+        client_base_url = str(http_client.base_url) if http_client is not None else ""
+        effective_base_url = client_base_url or base_url
+        self._base_url = effective_base_url.rstrip("/") + "/"
         self._client = http_client or httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout_seconds,
@@ -443,12 +445,20 @@ class ODataClient:
         skip: int | None,
     ) -> dict[str, str]:
         """Build supported OData query parameters."""
-        if top is not None and top < 0:
-            msg = "$top must be greater than or equal to zero"
-            raise ValueError(msg)
-        if skip is not None and skip < 0:
-            msg = "$skip must be greater than or equal to zero"
-            raise ValueError(msg)
+        if top is not None:
+            if isinstance(top, bool) or not isinstance(top, int):
+                msg = "$top must be an integer"
+                raise ValueError(msg)
+            if top < 0:
+                msg = "$top must be greater than or equal to zero"
+                raise ValueError(msg)
+        if skip is not None:
+            if isinstance(skip, bool) or not isinstance(skip, int):
+                msg = "$skip must be an integer"
+                raise ValueError(msg)
+            if skip < 0:
+                msg = "$skip must be greater than or equal to zero"
+                raise ValueError(msg)
 
         params: dict[str, str] = {}
         if filter is not None:
@@ -480,6 +490,7 @@ class ODataClient:
         except KeyError as exc:
             msg = f"Unsupported Tweede Kamer entity set: {entity_set}"
             raise ValueError(msg) from exc
+
 
 # Backward compatibility alias for earlier client code that used CommissieLid.
 CommissieLid = CommissieZetel

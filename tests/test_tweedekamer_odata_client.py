@@ -107,6 +107,56 @@ async def test_fetch_entities_follows_odata_next_link_automatically() -> None:
     assert len(requests) == 2
 
 
+async def test_fetch_entities_follows_relative_odata_next_link() -> None:
+    """The client should resolve relative @odata.nextLink values against the effective base URL."""
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(str(request.url))
+        if request.url.params.get("$skip") == "1":
+            return httpx.Response(
+                200,
+                json={
+                    "value": [
+                        {
+                            "Id": "a9e0f6c1-795e-466b-a85a-a2d017f67a0c",
+                            "Achternaam": "De Boer",
+                        }
+                    ]
+                },
+                request=request,
+            )
+
+        return httpx.Response(
+            200,
+            json={
+                "value": [
+                    {
+                        "Id": "fab499e2-93b6-4bba-8266-00014175f6a6",
+                        "Achternaam": "Jansen",
+                    }
+                ],
+                "@odata.nextLink": "/OData/v4/2.0/Persoon?$skip=1&$top=1",
+            },
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url=TEST_BASE_URL) as http_client:
+        client = ODataClient(
+            base_url="https://wrong.example.test/ignored/",
+            http_client=http_client,
+        )
+        people = await client.list_persoon(top=1)
+
+    assert len(people) == 2
+    assert [person.achternaam for person in people] == ["Jansen", "De Boer"]
+    assert requests == [
+        "https://example.test/OData/v4/2.0/Persoon?%24top=1",
+        "https://example.test/OData/v4/2.0/Persoon?$skip=1&$top=1",
+    ]
+
+
 async def test_fetch_entities_uses_default_model_mapping() -> None:
     """Known entity sets should resolve to their typed model automatically."""
 
@@ -168,24 +218,29 @@ async def test_list_commissielid_uses_commissiezetel_entity_set() -> None:
     assert commissiezetels[0].gewicht == 10000
 
 
-def test_fetch_entities_rejects_negative_top_or_skip() -> None:
-    """Negative pagination values should be rejected before the request is sent."""
-    with pytest.raises(ValueError, match=r"\$top"):
+@pytest.mark.parametrize(
+    ("top", "skip", "message"),
+    [
+        (-1, None, r"\$top must be greater than or equal to zero"),
+        (None, -1, r"\$skip must be greater than or equal to zero"),
+        (True, None, r"\$top must be an integer"),
+        (1.5, None, r"\$top must be an integer"),
+        (None, False, r"\$skip must be an integer"),
+        (None, 2.5, r"\$skip must be an integer"),
+    ],
+)
+def test_fetch_entities_rejects_invalid_top_or_skip(
+    top: object,
+    skip: object,
+    message: str,
+) -> None:
+    """Invalid pagination values should be rejected before the request is sent."""
+    with pytest.raises(ValueError, match=message):
         ODataClient._build_query_params(
             filter=None,
             select=None,
             expand=None,
             orderby=None,
-            top=-1,
-            skip=None,
-        )
-
-    with pytest.raises(ValueError, match=r"\$skip"):
-        ODataClient._build_query_params(
-            filter=None,
-            select=None,
-            expand=None,
-            orderby=None,
-            top=None,
-            skip=-1,
+            top=top,  # type: ignore[arg-type]
+            skip=skip,  # type: ignore[arg-type]
         )
