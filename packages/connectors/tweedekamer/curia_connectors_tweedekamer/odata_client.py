@@ -481,7 +481,7 @@ class ODataClient:
             msg = f"Unsupported Tweede Kamer entity set: {entity_set}"
             raise ValueError(msg) from exc
 
-
+# Backward compatibility alias for earlier client code that used CommissieLid.
 CommissieLid = CommissieZetel
 
 
