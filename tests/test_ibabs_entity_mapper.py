@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Generator
 from datetime import UTC, datetime
 
 import curia_domain.db.models as _models  # noqa: F401
@@ -39,7 +39,7 @@ GOVERNING_BODY_ID = uuid.uuid4()
 
 
 @pytest.fixture(autouse=True)
-def _patch_sqlite_type_compiler() -> Iterator[None]:
+def _patch_sqlite_type_compiler() -> Generator[None, None, None]:
     """Temporarily patch SQLiteTypeCompiler to handle PostgreSQL-only types.
 
     This avoids leaking the patch into unrelated tests that may rely on the
@@ -48,8 +48,8 @@ def _patch_sqlite_type_compiler() -> Iterator[None]:
     orig_array = getattr(SQLiteTypeCompiler, "visit_ARRAY", None)
     orig_jsonb = getattr(SQLiteTypeCompiler, "visit_JSONB", None)
 
-    SQLiteTypeCompiler.visit_ARRAY = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
-    SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
+    setattr(SQLiteTypeCompiler, "visit_ARRAY", lambda self, type_, **kw: "TEXT")
+    setattr(SQLiteTypeCompiler, "visit_JSONB", lambda self, type_, **kw: "TEXT")
 
     yield
 
@@ -57,11 +57,11 @@ def _patch_sqlite_type_compiler() -> Iterator[None]:
     if orig_array is None:
         delattr(SQLiteTypeCompiler, "visit_ARRAY")
     else:
-        SQLiteTypeCompiler.visit_ARRAY = orig_array  # type: ignore[assignment]
+        setattr(SQLiteTypeCompiler, "visit_ARRAY", orig_array)
     if orig_jsonb is None:
         delattr(SQLiteTypeCompiler, "visit_JSONB")
     else:
-        SQLiteTypeCompiler.visit_JSONB = orig_jsonb  # type: ignore[assignment]
+        setattr(SQLiteTypeCompiler, "visit_JSONB", orig_jsonb)
 
 
 @pytest.fixture
