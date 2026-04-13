@@ -40,12 +40,12 @@ def test_domain_models_can_be_created() -> None:
 
 def test_create_app_builds_fastapi_application(api_app: FastAPI) -> None:
     """The API application should build successfully."""
-    route_paths = {route.path for route in api_app.routes if isinstance(route, APIRoute)}
+    api_route_paths = {route.path for route in api_app.routes if isinstance(route, APIRoute)}
 
     assert api_app.title == "Curia API"
     assert api_app.debug is True
-    assert "/health" in route_paths
-    assert any(route_path.startswith("/api/v1/") for route_path in route_paths)
+    assert "/health" in api_route_paths
+    assert any(route_path.startswith("/api/v1/") for route_path in api_route_paths)
 
 
 def test_connector_metadata_smoke(connector_instances: list[SourceConnector]) -> None:
