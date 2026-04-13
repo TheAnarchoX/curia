@@ -11,6 +11,8 @@ dependencies = [
     "redis>=5.0",
     "httpx>=0.27",
     "curia-domain",
+    "curia-ingestion",
+    "curia-connectors-ibabs",
 ]
 [build-system]
 requires = ["hatchling"]
@@ -18,6 +20,8 @@ build-backend = "hatchling.build"
 
 [tool.uv.sources]
 curia-domain = { workspace = true }
+curia-ingestion = { workspace = true }
+curia-connectors-ibabs = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
