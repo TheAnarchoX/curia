@@ -16,3 +16,49 @@ Data available (CC-0 license, no auth required):
 
 See: https://opendata.tweedekamer.nl/documentatie/odata-api
 """
+
+from curia_connectors_tweedekamer.connector import TweedeKamerConnector
+from curia_connectors_tweedekamer.odata_client import (
+    Activiteit,
+    Agendapunt,
+    Besluit,
+    Commissie,
+    CommissieLid,
+    CommissieZetel,
+    Document,
+    DocumentActor,
+    Fractie,
+    FractieZetel,
+    Kamerstukdossier,
+    ODataClient,
+    ODataEntity,
+    Persoon,
+    QueryOptions,
+    Stemming,
+    Vergadering,
+    Zaak,
+    ZaakActor,
+)
+
+__all__ = [
+    "Agendapunt",
+    "Activiteit",
+    "Besluit",
+    "Commissie",
+    "CommissieLid",
+    "CommissieZetel",
+    "Document",
+    "DocumentActor",
+    "Fractie",
+    "FractieZetel",
+    "Kamerstukdossier",
+    "ODataClient",
+    "ODataEntity",
+    "Persoon",
+    "QueryOptions",
+    "Stemming",
+    "TweedeKamerConnector",
+    "Vergadering",
+    "Zaak",
+    "ZaakActor",
+]
