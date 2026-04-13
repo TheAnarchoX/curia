@@ -14,13 +14,29 @@ Key entities:
 
 from __future__ import annotations
 
+import asyncio
+import uuid
+from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
 
+from curia_domain.db.models import MandateRow, PartyRow, PoliticianRow
+from curia_domain.enums import JurisdictionLevel, MandateRole
+from curia_domain.models import Mandate, Party, Politician
 from curia_ingestion.interfaces import (
     CrawlConfig,
     CrawlResult,
     SourceConnector,
     SourceConnectorMeta,
+)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from curia_connectors_tweedekamer.odata_client import (
+    Fractie,
+    FractieZetelPersoon,
+    ODataClient,
+    Persoon,
 )
 
 _VERSION = "0.1.0"
@@ -44,6 +60,18 @@ ENTITIES = (
     "Activiteit",
     "Kamerstukdossier",
 )
+
+
+@dataclass
+class MemberPartySyncResult:
+    """Outcome of syncing Tweede Kamer members, parties, and memberships."""
+
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    fetched_people: int = 0
+    fetched_parties: int = 0
+    fetched_memberships: int = 0
 
 
 class TweedeKamerConnector(SourceConnector):
@@ -100,3 +128,291 @@ class TweedeKamerConnector(SourceConnector):
     async def set_checkpoint(self, checkpoint: dict[str, Any]) -> None:
         """Persist a sync checkpoint."""
         self._checkpoint = dict(checkpoint)
+
+    async def sync_members_and_parties(
+        self,
+        session: AsyncSession,
+        *,
+        institution_id: uuid.UUID,
+        governing_body_id: uuid.UUID,
+        odata_client: ODataClient | None = None,
+    ) -> MemberPartySyncResult:
+        """Fetch Tweede Kamer people, parties, and memberships and persist them."""
+        manages_client = odata_client is None
+        client = odata_client or ODataClient()
+        result = MemberPartySyncResult()
+
+        try:
+            people, parties, seats = await asyncio.gather(
+                client.list_persoon(),
+                client.list_fractie(),
+                client.list_fractiezetel(expand=["FractieZetelPersoon"]),
+            )
+
+            result.fetched_people = len(people)
+            result.fetched_parties = len(parties)
+            result.fetched_memberships = sum(
+                len(seat.fractiezetel_persoon)
+                for seat in seats
+                if not seat.verwijderd
+            )
+
+            party_rows_by_id: dict[uuid.UUID, PartyRow] = {}
+            politician_rows_by_id: dict[uuid.UUID, PoliticianRow] = {}
+
+            for party in parties:
+                created, party_row = await self._upsert_party(session, party)
+                if created is None:
+                    result.skipped += 1
+                    continue
+                result.created += int(created)
+                result.updated += int(not created)
+                if party.id is not None:
+                    party_rows_by_id[party.id] = party_row
+
+            for person in people:
+                created, politician_row = await self._upsert_politician(session, person)
+                if created is None:
+                    result.skipped += 1
+                    continue
+                result.created += int(created)
+                result.updated += int(not created)
+                if person.id is not None:
+                    politician_rows_by_id[person.id] = politician_row
+
+            for seat in seats:
+                if seat.verwijderd or seat.fractie_id is None:
+                    continue
+                membership_party_row = party_rows_by_id.get(seat.fractie_id)
+                if membership_party_row is None:
+                    result.skipped += len(seat.fractiezetel_persoon)
+                    continue
+
+                for membership in seat.fractiezetel_persoon:
+                    created = await self._upsert_membership(
+                        session,
+                        membership=membership,
+                        party_row=membership_party_row,
+                        politician_rows_by_id=politician_rows_by_id,
+                        institution_id=institution_id,
+                        governing_body_id=governing_body_id,
+                    )
+                    if created is None:
+                        result.skipped += 1
+                        continue
+                    result.created += int(created)
+                    result.updated += int(not created)
+
+            await session.flush()
+            return result
+        finally:
+            if manages_client:
+                await client.aclose()
+
+    @staticmethod
+    def _build_politician(person: Persoon) -> Politician | None:
+        given_name = person.roepnaam or person.voornamen
+        family_name = " ".join(
+            part
+            for part in (person.tussenvoegsel, person.achternaam)
+            if part and part.strip()
+        ) or None
+        full_name = " ".join(part for part in (given_name, family_name) if part)
+
+        if not full_name:
+            return None
+
+        return Politician(
+            full_name=full_name,
+            given_name=given_name,
+            family_name=family_name,
+            initials=person.initialen,
+            gender=person.geslacht,
+            date_of_birth=person.geboortedatum,
+            notes=person.functie,
+        )
+
+    @staticmethod
+    def _build_party(fractie: Fractie) -> Party | None:
+        name = fractie.naam_nl or fractie.afkorting
+        if not name:
+            return None
+
+        return Party(
+            name=name,
+            abbreviation=fractie.afkorting,
+            scope_level=JurisdictionLevel.NATIONAL,
+            active_from=TweedeKamerConnector._coerce_date(fractie.datum_actief),
+            active_until=TweedeKamerConnector._coerce_date(fractie.datum_inactief),
+        )
+
+    @staticmethod
+    def _build_mandate(
+        membership: FractieZetelPersoon,
+        *,
+        politician_id: uuid.UUID,
+        party_id: uuid.UUID,
+        institution_id: uuid.UUID,
+        governing_body_id: uuid.UUID,
+    ) -> Mandate | None:
+        if membership.verwijderd:
+            return None
+
+        return Mandate(
+            politician_id=politician_id,
+            party_id=party_id,
+            institution_id=institution_id,
+            governing_body_id=governing_body_id,
+            role=TweedeKamerConnector._map_role(membership.functie),
+            start_date=TweedeKamerConnector._coerce_date(membership.van),
+            end_date=TweedeKamerConnector._coerce_date(membership.tot_en_met),
+        )
+
+    @staticmethod
+    async def _upsert_party(
+        session: AsyncSession,
+        fractie: Fractie,
+    ) -> tuple[bool | None, PartyRow]:
+        party = TweedeKamerConnector._build_party(fractie)
+        if party is None:
+            return None, PartyRow(name="")
+
+        row = (await session.execute(select(PartyRow).where(PartyRow.name == party.name))).scalar_one_or_none()
+        if row is None:
+            row = PartyRow(
+                name=party.name,
+                abbreviation=party.abbreviation,
+                scope_level=party.scope_level,
+                active_from=party.active_from,
+                active_until=party.active_until,
+            )
+            session.add(row)
+            return True, row
+
+        row.abbreviation = party.abbreviation or row.abbreviation
+        row.scope_level = party.scope_level or row.scope_level
+        row.active_from = party.active_from or row.active_from
+        row.active_until = party.active_until or row.active_until
+        return False, row
+
+    @staticmethod
+    async def _upsert_politician(
+        session: AsyncSession,
+        person: Persoon,
+    ) -> tuple[bool | None, PoliticianRow]:
+        politician = TweedeKamerConnector._build_politician(person)
+        if politician is None:
+            return None, PoliticianRow(full_name="")
+
+        candidates = (
+            await session.execute(
+                select(PoliticianRow).where(PoliticianRow.full_name == politician.full_name),
+            )
+        ).scalars().all()
+
+        row = next(
+            (
+                candidate
+                for candidate in candidates
+                if candidate.date_of_birth == politician.date_of_birth
+            ),
+            candidates[0] if candidates else None,
+        )
+        if row is None:
+            row = PoliticianRow(
+                full_name=politician.full_name,
+                given_name=politician.given_name,
+                family_name=politician.family_name,
+                initials=politician.initials,
+                gender=politician.gender,
+                date_of_birth=politician.date_of_birth,
+                notes=politician.notes,
+            )
+            session.add(row)
+            return True, row
+
+        row.given_name = politician.given_name or row.given_name
+        row.family_name = politician.family_name or row.family_name
+        row.initials = politician.initials or row.initials
+        row.gender = politician.gender or row.gender
+        row.date_of_birth = politician.date_of_birth or row.date_of_birth
+        row.notes = politician.notes or row.notes
+        return False, row
+
+    @staticmethod
+    async def _upsert_membership(
+        session: AsyncSession,
+        *,
+        membership: FractieZetelPersoon,
+        party_row: PartyRow,
+        politician_rows_by_id: dict[uuid.UUID, PoliticianRow],
+        institution_id: uuid.UUID,
+        governing_body_id: uuid.UUID,
+    ) -> bool | None:
+        if membership.persoon_id is None:
+            return None
+
+        politician_row = politician_rows_by_id.get(membership.persoon_id)
+        if politician_row is None:
+            return None
+
+        mandate = TweedeKamerConnector._build_mandate(
+            membership,
+            politician_id=politician_row.id,
+            party_id=party_row.id,
+            institution_id=institution_id,
+            governing_body_id=governing_body_id,
+        )
+        if mandate is None:
+            return None
+
+        row = (
+            await session.execute(
+                select(MandateRow).where(
+                    MandateRow.politician_id == mandate.politician_id,
+                    MandateRow.party_id == mandate.party_id,
+                    MandateRow.institution_id == mandate.institution_id,
+                    MandateRow.governing_body_id == mandate.governing_body_id,
+                    MandateRow.role == mandate.role,
+                    MandateRow.start_date == mandate.start_date,
+                    MandateRow.end_date == mandate.end_date,
+                ),
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            session.add(
+                MandateRow(
+                    politician_id=mandate.politician_id,
+                    party_id=mandate.party_id,
+                    institution_id=mandate.institution_id,
+                    governing_body_id=mandate.governing_body_id,
+                    role=mandate.role,
+                    start_date=mandate.start_date,
+                    end_date=mandate.end_date,
+                )
+            )
+            return True
+
+        return False
+
+    @staticmethod
+    def _map_role(value: str | None) -> MandateRole:
+        if not value:
+            return MandateRole.MEMBER
+
+        normalised = value.strip().lower()
+        if "voorzitter" in normalised and "onder" not in normalised:
+            return MandateRole.CHAIR
+        if "ondervoorzitter" in normalised or "vice" in normalised:
+            return MandateRole.VICE_CHAIR
+        if "secretaris" in normalised:
+            return MandateRole.SECRETARY
+        return MandateRole.MEMBER
+
+    @staticmethod
+    def _coerce_date(value: datetime | date | None) -> date | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.date()
+        return value
