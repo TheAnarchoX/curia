@@ -158,7 +158,7 @@ class TweedeKamerConnector(SourceConnector):
 
             for party in parties:
                 created, party_row = await self._upsert_party(session, party)
-                if created is None:
+                if created is None or party_row is None:
                     result.skipped += 1
                     continue
                 result.created += int(created)
@@ -168,7 +168,7 @@ class TweedeKamerConnector(SourceConnector):
 
             for person in people:
                 created, politician_row = await self._upsert_politician(session, person)
-                if created is None:
+                if created is None or politician_row is None:
                     result.skipped += 1
                     continue
                 result.created += int(created)
@@ -266,10 +266,10 @@ class TweedeKamerConnector(SourceConnector):
     async def _upsert_party(
         session: AsyncSession,
         fractie: Fractie,
-    ) -> tuple[bool | None, PartyRow]:
+    ) -> tuple[bool | None, PartyRow | None]:
         party = TweedeKamerConnector._build_party(fractie)
         if party is None:
-            return None, PartyRow(name="")
+            return None, None
 
         row = (await session.execute(select(PartyRow).where(PartyRow.name == party.name))).scalar_one_or_none()
         if row is None:
@@ -293,10 +293,10 @@ class TweedeKamerConnector(SourceConnector):
     async def _upsert_politician(
         session: AsyncSession,
         person: Persoon,
-    ) -> tuple[bool | None, PoliticianRow]:
+    ) -> tuple[bool | None, PoliticianRow | None]:
         politician = TweedeKamerConnector._build_politician(person)
         if politician is None:
-            return None, PoliticianRow(full_name="")
+            return None, None
 
         candidates = (
             (
