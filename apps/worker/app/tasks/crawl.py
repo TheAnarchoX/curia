@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
@@ -53,7 +54,7 @@ def _build_connector(sync_state: dict[str, Any]) -> IbabsConnector:
 
 def _build_crawl_config(sync_state: dict[str, Any]) -> CrawlConfig:
     crawl_config = dict(sync_state["crawl_config"])
-    crawl_config["checkpoint"] = dict(sync_state.get("checkpoint") or {})
+    crawl_config["checkpoint"] = _checkpoint_dict(sync_state.get("checkpoint"))
     return CrawlConfig.model_validate(crawl_config)
 
 
@@ -154,27 +155,56 @@ def _map_parse_result(parse_result: ParseResult) -> tuple[list[dict[str, Any]], 
     }
 
 
-def _update_checkpoint(sync_state: dict[str, Any]) -> dict[str, Any]:
-    checkpoint = dict(sync_state.get("checkpoint") or {})
-    processed_urls = list(checkpoint.get("processed_urls") or [])
+def _checkpoint_dict(checkpoint: Any) -> dict[str, Any]:
+    if isinstance(checkpoint, Mapping):
+        return dict(checkpoint)
+    return {}
+
+
+def _checkpoint_processed_urls(checkpoint: Mapping[str, Any]) -> list[str]:
+    processed_urls = checkpoint.get("processed_urls")
+    if isinstance(processed_urls, list):
+        return [url for url in processed_urls if isinstance(url, str)]
+    return []
+
+
+def _checkpoint_page_offsets(checkpoint: Mapping[str, Any]) -> dict[str, dict[str, int | str]]:
+    page_offsets = checkpoint.get("page_offsets")
+    if not isinstance(page_offsets, Mapping):
+        return {}
+
+    return {
+        section: dict(offset_data)
+        for section, offset_data in page_offsets.items()
+        if isinstance(section, str) and isinstance(offset_data, Mapping)
+    }
+
+
+def _build_updated_checkpoint(sync_state: Mapping[str, Any]) -> dict[str, Any]:
+    checkpoint = _checkpoint_dict(sync_state.get("checkpoint"))
+    processed_urls = _checkpoint_processed_urls(checkpoint)
     current_url = sync_state["current_url"]
     if current_url not in processed_urls:
         processed_urls.append(current_url)
-    page_offsets = dict(checkpoint.get("page_offsets") or {})
+    page_offsets = _checkpoint_page_offsets(checkpoint)
     section = _resolve_incremental_section(sync_state, current_url)
     if section is not None:
         page_offsets[section] = _extract_page_offset(current_url)
-    synced_at = datetime.now(UTC).isoformat()
+    updated_at = datetime.now(UTC).isoformat()
     checkpoint.update(
         {
             "last_successful_page_url": current_url,
-            "last_synced_at": synced_at,
+            "last_synced_at": updated_at,
             "page_offsets": page_offsets,
             "processed_urls": processed_urls,
-            "updated_at": synced_at,
+            "updated_at": updated_at,
         }
     )
-    sync_state["checkpoint"] = checkpoint
+    return checkpoint
+
+
+def _update_checkpoint(sync_state: dict[str, Any]) -> dict[str, Any]:
+    sync_state["checkpoint"] = _build_updated_checkpoint(sync_state)
     return sync_state
 
 
@@ -213,7 +243,7 @@ def _extract_page_offset(url: str) -> dict[str, int | str]:
 
 async def _crawl_page_async(sync_state: dict[str, Any], url: str) -> CrawlResult:
     connector = _build_connector(sync_state)
-    await connector.set_checkpoint(dict(sync_state.get("checkpoint") or {}))
+    await connector.set_checkpoint(_checkpoint_dict(sync_state.get("checkpoint")))
     return await connector.crawl_page(url, _build_crawl_config(sync_state))
 
 
@@ -221,7 +251,7 @@ async def _persist_mapped_page_async(
     sync_state: dict[str, Any],
     parse_payload: dict[str, Any],
     mapped_entities: list[dict[str, Any]],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     parse_result = _deserialise_parse_result(parse_payload)
     parse_result = parse_result.model_copy(update={"entities": mapped_entities})
 
@@ -231,39 +261,36 @@ async def _persist_mapped_page_async(
             governing_body_id=uuid.UUID(sync_state["governing_body_id"]),
         )
         map_result = await mapper.map_and_persist(parse_result)
+        checkpoint: dict[str, Any] | None = None
+        if not map_result.errors:
+            checkpoint = _build_updated_checkpoint(sync_state)
+            source_id_value = sync_state.get("source_id")
+            source_id: uuid.UUID | None = None
+            if isinstance(source_id_value, uuid.UUID):
+                source_id = source_id_value
+            elif isinstance(source_id_value, str):
+                try:
+                    source_id = uuid.UUID(source_id_value)
+                except ValueError:
+                    source_id = None
+
+            if source_id is not None:
+                source_row = await session.scalar(select(SourceRow).where(SourceRow.id == source_id))
+                if source_row is not None:
+                    source_config = dict(source_row.config or {})
+                    source_config["checkpoint"] = checkpoint
+                    source_row.config = source_config
         await session.commit()
 
-    return {
-        "created": map_result.created,
-        "updated": map_result.updated,
-        "skipped": map_result.skipped,
-        "errors": list(map_result.errors),
-    }
-
-
-async def _persist_checkpoint_async(sync_state: dict[str, Any]) -> None:
-    checkpoint = dict(sync_state.get("checkpoint") or {})
-    if not checkpoint:
-        return
-
-    source_id_value = sync_state.get("source_id")
-    if not isinstance(source_id_value, (str, uuid.UUID)):
-        return
-
-    try:
-        source_id = uuid.UUID(source_id_value) if isinstance(source_id_value, str) else source_id_value
-    except ValueError:
-        return
-
-    async with async_session_factory() as session:
-        source_row = await session.scalar(select(SourceRow).where(SourceRow.id == source_id))
-        if source_row is None:
-            return
-
-        source_config = dict(source_row.config or {})
-        source_config["checkpoint"] = checkpoint
-        source_row.config = source_config
-        await session.commit()
+    return (
+        {
+            "created": map_result.created,
+            "updated": map_result.updated,
+            "skipped": map_result.skipped,
+            "errors": list(map_result.errors),
+        },
+        checkpoint,
+    )
 
 
 @celery_app.task(name="crawl.run_crawl_job")
@@ -373,7 +400,9 @@ def persist_page(sync_state: dict[str, Any]) -> dict[str, Any]:
         return _set_page_error(state, "persist", "missing mapped entities")
 
     try:
-        persist_result = asyncio.run(_persist_mapped_page_async(state, parse_payload, mapped_entities))
+        persist_result, checkpoint = asyncio.run(
+            _persist_mapped_page_async(state, parse_payload, mapped_entities)
+        )
     except (SQLAlchemyError, ValueError) as exc:
         logger.exception("Unhandled persist failure for %s", state.get("current_url"))
         return _set_page_error(state, "persist", str(exc))
@@ -383,11 +412,6 @@ def persist_page(sync_state: dict[str, Any]) -> dict[str, Any]:
         _append_sync_error(state, f"persist error for {state.get('current_url')}: {error}")
 
     state["persist_result"] = persist_result
-    if not persist_result["errors"]:
-        _update_checkpoint(state)
-        try:
-            asyncio.run(_persist_checkpoint_async(state))
-        except SQLAlchemyError as exc:
-            logger.exception("Unhandled checkpoint persistence failure for %s", state.get("current_url"))
-            return _set_page_error(state, "persist", str(exc))
+    if checkpoint is not None:
+        state["checkpoint"] = checkpoint
     return state
