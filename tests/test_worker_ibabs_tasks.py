@@ -2,16 +2,69 @@
 
 from __future__ import annotations
 
+import asyncio
+import tempfile
+import uuid
+from collections.abc import Generator
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
+import curia_domain.db.models as _models  # noqa: F401
 import pytest
 from celery import Signature
+from curia_domain.db.base import Base
+from curia_domain.db.models import SourceRow
 from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from apps.worker.app.tasks.crawl import crawl_page, map_page, parse_page, persist_page
-from apps.worker.app.tasks.source_sync import build_ibabs_sync_signatures, sync_source
+from apps.worker.app.tasks.source_sync import (
+    _discover_ibabs_pages,
+    _resolve_ibabs_sync_state,
+    build_ibabs_sync_signatures,
+    sync_source,
+)
+
+
+@pytest.fixture(autouse=True)
+def _patch_sqlite_type_compiler() -> Generator[None, None, None]:
+    """Temporarily patch SQLiteTypeCompiler to handle PostgreSQL-only types."""
+    orig_array = getattr(SQLiteTypeCompiler, "visit_ARRAY", None)
+    orig_jsonb = getattr(SQLiteTypeCompiler, "visit_JSONB", None)
+
+    setattr(SQLiteTypeCompiler, "visit_ARRAY", lambda self, type_, **kw: "TEXT")
+    setattr(SQLiteTypeCompiler, "visit_JSONB", lambda self, type_, **kw: "TEXT")
+
+    yield
+
+    if orig_array is None:
+        delattr(SQLiteTypeCompiler, "visit_ARRAY")
+    else:
+        setattr(SQLiteTypeCompiler, "visit_ARRAY", orig_array)
+    if orig_jsonb is None:
+        delattr(SQLiteTypeCompiler, "visit_JSONB")
+    else:
+        setattr(SQLiteTypeCompiler, "visit_JSONB", orig_jsonb)
+
+
+@pytest.fixture
+def sqlite_session_factory() -> Generator[async_sessionmaker[AsyncSession], None, None]:
+    """Yield an async session factory backed by a temporary SQLite database file."""
+    with tempfile.NamedTemporaryFile(suffix=".db") as db_file:
+        engine = create_async_engine(f"sqlite+aiosqlite:///{db_file.name}", echo=False)
+
+        async def _create_schema() -> None:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+        asyncio.run(_create_schema())
+
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        yield factory
+        asyncio.run(engine.dispose())
 
 
 def _sync_state() -> dict[str, Any]:
@@ -158,9 +211,18 @@ def test_pipeline_updates_checkpoint_after_successful_page(monkeypatch: pytest.M
         sync_state: dict[str, Any],
         parse_payload: dict[str, Any],
         mapped_entities: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
         assert mapped_entities[0]["entity_type"] == "meeting_summary"
-        return {"created": 1, "updated": 0, "skipped": 0, "errors": []}
+        return (
+            {"created": 1, "updated": 0, "skipped": 0, "errors": []},
+            {
+                "last_successful_page_url": sync_state["current_url"],
+                "last_synced_at": "2026-04-13T19:40:00+00:00",
+                "page_offsets": {"meetings": {"param": "page", "value": 0}},
+                "processed_urls": [sync_state["current_url"]],
+                "updated_at": "2026-04-13T19:40:00+00:00",
+            },
+        )
 
     monkeypatch.setattr("apps.worker.app.tasks.crawl._crawl_page_async", fake_crawl)
     monkeypatch.setattr("apps.worker.app.tasks.crawl._parse_crawl_result", fake_parse)
@@ -172,10 +234,53 @@ def test_pipeline_updates_checkpoint_after_successful_page(monkeypatch: pytest.M
     state = map_page.run(state)
     state = persist_page.run(state)
 
-    assert state["page_error"] is None
+    assert state.get("page_error") is None
     assert state["persist_result"] == {"created": 1, "updated": 0, "skipped": 0, "errors": []}
     assert state["checkpoint"]["last_successful_page_url"] == url
     assert state["checkpoint"]["processed_urls"] == [url]
+
+
+def test_pipeline_normalises_invalid_checkpoint_shapes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """persist_page should tolerate malformed checkpoint payloads."""
+
+    async def fake_crawl(sync_state: dict[str, Any], url: str) -> CrawlResult:
+        return _crawl_result(url)
+
+    def fake_parse(crawl_result: CrawlResult) -> ParseResult:
+        return _parse_result(crawl_result.url)
+
+    async def fake_persist(
+        sync_state: dict[str, Any],
+        parse_payload: dict[str, Any],
+        mapped_entities: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        return (
+            {"created": 1, "updated": 0, "skipped": 0, "errors": []},
+            {
+                "last_successful_page_url": sync_state["current_url"],
+                "last_synced_at": "2026-04-13T19:40:00+00:00",
+                "page_offsets": {"meetings": {"param": "page", "value": 0}},
+                "processed_urls": [sync_state["current_url"]],
+                "updated_at": "2026-04-13T19:40:00+00:00",
+            },
+        )
+
+    state = _sync_state()
+    state["checkpoint"] = {"processed_urls": "broken", "page_offsets": ["broken"]}
+
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._crawl_page_async", fake_crawl)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._parse_crawl_result", fake_parse)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._persist_mapped_page_async", fake_persist)
+
+    url = "https://almelo.bestuurlijkeinformatie.nl/meetings"
+    state = crawl_page.run(state, url)
+    state = parse_page.run(state)
+    state = map_page.run(state)
+    state = persist_page.run(state)
+
+    assert state["page_error"] is None
+    assert state["checkpoint"]["processed_urls"] == [url]
+    assert state["checkpoint"]["page_offsets"] == {"meetings": {"param": "page", "value": 0}}
 
 
 def test_pipeline_logs_page_errors_without_blocking_later_pages(
@@ -197,8 +302,17 @@ def test_pipeline_logs_page_errors_without_blocking_later_pages(
         sync_state: dict[str, Any],
         parse_payload: dict[str, Any],
         mapped_entities: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        return {"created": 1, "updated": 0, "skipped": 0, "errors": []}
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        return (
+            {"created": 1, "updated": 0, "skipped": 0, "errors": []},
+            {
+                "last_successful_page_url": sync_state["current_url"],
+                "last_synced_at": "2026-04-13T19:40:00+00:00",
+                "page_offsets": {"meetings": {"param": "page", "value": 0}},
+                "processed_urls": [sync_state["current_url"]],
+                "updated_at": "2026-04-13T19:40:00+00:00",
+            },
+        )
 
     monkeypatch.setattr("apps.worker.app.tasks.crawl._crawl_page_async", fake_crawl)
     monkeypatch.setattr("apps.worker.app.tasks.crawl._parse_crawl_result", fake_parse)
@@ -222,7 +336,213 @@ def test_pipeline_logs_page_errors_without_blocking_later_pages(
         "https://almelo.bestuurlijkeinformatie.nl/broken",
         "https://almelo.bestuurlijkeinformatie.nl/meetings",
     ]
-    assert recovered_state["page_error"] is None
+    assert recovered_state.get("page_error") is None
     assert recovered_state["checkpoint"]["last_successful_page_url"] == (
         "https://almelo.bestuurlijkeinformatie.nl/meetings"
     )
+
+
+def test_discover_pages_keeps_unsynced_sections_when_checkpoint_is_partial() -> None:
+    """Partial checkpoints should keep unsynced sections in the discovered seed list."""
+    state = _resolve_ibabs_sync_state(
+        source_id=str(uuid.uuid4()),
+        municipality_slug="almelo",
+        base_url="https://almelo.bestuurlijkeinformatie.nl",
+        governing_body_id=str(uuid.uuid4()),
+        checkpoint={
+            "last_synced_at": "2026-04-13T19:40:00+00:00",
+            "page_offsets": {"meetings": {"param": "page", "value": 2}},
+        },
+    )
+
+    urls = asyncio.run(_discover_ibabs_pages(state))
+
+    assert len(urls) == 4
+    assert "https://almelo.bestuurlijkeinformatie.nl/meetings?page=2" in urls
+    assert "https://almelo.bestuurlijkeinformatie.nl/reports" in urls
+    assert "https://almelo.bestuurlijkeinformatie.nl/parties" in urls
+    assert "https://almelo.bestuurlijkeinformatie.nl/members" in urls
+
+
+def test_persist_page_reuses_single_session_for_checkpoint_write(
+    monkeypatch: pytest.MonkeyPatch,
+    sqlite_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """persist_page should write entities and checkpoint in one DB session."""
+    source_id = uuid.uuid4()
+    governing_body_id = uuid.uuid4()
+    session_calls = 0
+
+    async def seed_source() -> None:
+        async with sqlite_session_factory() as session:
+            session.add(
+                SourceRow(
+                    id=source_id,
+                    name="Almelo iBabs",
+                    source_type="ibabs",
+                    base_url="https://almelo.bestuurlijkeinformatie.nl",
+                    config={},
+                )
+            )
+            await session.commit()
+
+    asyncio.run(seed_source())
+
+    def counting_session_factory() -> AsyncSession:
+        nonlocal session_calls
+        session_calls += 1
+        return sqlite_session_factory()
+
+    class _FakeMapResult:
+        created = 1
+        updated = 0
+        skipped = 0
+        errors: list[str] = []
+
+    class _FakeMapper:
+        def __init__(self, session: AsyncSession, governing_body_id: uuid.UUID) -> None:
+            self._session = session
+            self._governing_body_id = governing_body_id
+
+        async def map_and_persist(self, parse_result: ParseResult) -> _FakeMapResult:
+            return _FakeMapResult()
+
+    monkeypatch.setattr("apps.worker.app.tasks.crawl.async_session_factory", counting_session_factory)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl.IbabsEntityMapper", _FakeMapper)
+
+    url = "https://almelo.bestuurlijkeinformatie.nl/meetings"
+    parse_result = _parse_result(url).model_dump(mode="json")
+    mapped_entities = [entity.model_dump(mode="json") for entity in _parse_result(url).entities]
+    state = {
+        **_sync_state(),
+        "source_id": str(source_id),
+        "governing_body_id": str(governing_body_id),
+        "current_url": url,
+        "parse_result": parse_result,
+        "mapped_entities": mapped_entities,
+    }
+
+    state = persist_page.run(state)
+
+    async def load_source_row() -> SourceRow | None:
+        async with sqlite_session_factory() as session:
+            return cast(
+                SourceRow | None,
+                await session.scalar(select(SourceRow).where(SourceRow.id == source_id)),
+            )
+
+    persisted_source = asyncio.run(load_source_row())
+
+    assert state.get("page_error") is None
+    assert session_calls == 1
+    assert persisted_source is not None
+    assert persisted_source.config == {"checkpoint": state["checkpoint"]}
+
+
+def test_sync_source_persists_checkpoint_and_discovers_fewer_pages_on_rerun(
+    monkeypatch: pytest.MonkeyPatch,
+    sqlite_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A completed sync should persist an incremental checkpoint for the next run."""
+    source_id = uuid.uuid4()
+    governing_body_id = uuid.uuid4()
+    base_url = "https://almelo.bestuurlijkeinformatie.nl"
+
+    async def seed_source() -> None:
+        async with sqlite_session_factory() as session:
+            session.add(
+                SourceRow(
+                    id=source_id,
+                    name="Almelo iBabs",
+                    source_type="ibabs",
+                    base_url=base_url,
+                    config={},
+                )
+            )
+            await session.commit()
+
+    asyncio.run(seed_source())
+
+    monkeypatch.setattr("apps.worker.app.tasks.source_sync.async_session_factory", sqlite_session_factory)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl.async_session_factory", sqlite_session_factory)
+
+    def fake_chain(*signatures: Signature) -> Any:
+        class _FakeChain:
+            def apply_async(self) -> SimpleNamespace:
+                return SimpleNamespace(id="job-123")
+
+        return _FakeChain()
+
+    async def fake_crawl(sync_state: dict[str, Any], url: str) -> CrawlResult:
+        return _crawl_result(url)
+
+    def fake_parse(crawl_result: CrawlResult) -> ParseResult:
+        return _parse_result(crawl_result.url)
+
+    class _FakeMapResult:
+        created = 1
+        updated = 0
+        skipped = 0
+        errors: list[str] = []
+
+    class _FakeMapper:
+        def __init__(self, session: AsyncSession, governing_body_id: uuid.UUID) -> None:
+            self._session = session
+            self._governing_body_id = governing_body_id
+
+        async def map_and_persist(self, parse_result: ParseResult) -> _FakeMapResult:
+            return _FakeMapResult()
+
+    monkeypatch.setattr("apps.worker.app.tasks.source_sync.chain", fake_chain)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._crawl_page_async", fake_crawl)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._parse_crawl_result", fake_parse)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl.IbabsEntityMapper", _FakeMapper)
+
+    first_run = sync_source.run(
+        str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+    )
+    assert first_run["pages"] == 4
+
+    state = _resolve_ibabs_sync_state(
+        source_id=str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+        checkpoint={},
+    )
+    first_urls = asyncio.run(_discover_ibabs_pages(state))
+    assert len(first_urls) == first_run["pages"]
+
+    for url in first_urls:
+        state = crawl_page.run(state, url)
+        state = parse_page.run(state)
+        state = map_page.run(state)
+        state = persist_page.run(state)
+
+    async def load_source_row() -> SourceRow | None:
+        async with sqlite_session_factory() as session:
+            return cast(
+                SourceRow | None,
+                await session.scalar(select(SourceRow).where(SourceRow.id == source_id)),
+            )
+
+    persisted_source = asyncio.run(load_source_row())
+    assert persisted_source is not None
+    assert persisted_source.config is not None
+    assert persisted_source.config["checkpoint"]["last_synced_at"]
+    assert persisted_source.config["checkpoint"]["page_offsets"] == {
+        "meetings": {"param": "page", "value": 0},
+        "reports": {"param": "page", "value": 0},
+    }
+
+    second_run = sync_source.run(
+        str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+    )
+
+    assert second_run["pages"] < first_run["pages"]

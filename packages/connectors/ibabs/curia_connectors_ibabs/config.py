@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+INCREMENTAL_SYNC_SECTIONS = ("meetings", "reports")
+
 
 class IbabsSourceConfig(BaseModel):
     """Configuration specific to an iBabs portal instance."""

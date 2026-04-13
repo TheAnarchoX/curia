@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from curia_ingestion.client import CrawlerClient
 from curia_ingestion.interfaces import (
@@ -15,7 +15,7 @@ from curia_ingestion.interfaces import (
 from curia_ingestion.rate_limiter import RateLimiter
 from curia_ingestion.retry import RetryPolicy
 
-from curia_connectors_ibabs.config import IbabsSourceConfig
+from curia_connectors_ibabs.config import INCREMENTAL_SYNC_SECTIONS, IbabsSourceConfig
 
 _VERSION = "0.1.0"
 
@@ -48,12 +48,42 @@ class IbabsConnector(SourceConnector):
     async def discover_pages(self, config: CrawlConfig) -> list[str]:
         """Build the initial seed URLs from the configured paths."""
         base = config.base_url or self._config.base_url
-        urls: list[str] = []
+        urls_by_section: list[tuple[str, str]] = []
 
         for section, path in self._config.custom_paths.items():
             if section in self._config.known_capabilities:
                 seed_url = urljoin(base.rstrip("/") + "/", path.lstrip("/"))
-                urls.append(seed_url)
+                urls_by_section.append((section, seed_url))
+
+        urls = [url for _, url in urls_by_section]
+
+        checkpoint_offsets = self._checkpoint.get("page_offsets")
+        if self._checkpoint.get("last_synced_at") and isinstance(checkpoint_offsets, dict):
+            incremental_sections = [section for section, _ in urls_by_section if section in INCREMENTAL_SYNC_SECTIONS]
+            if incremental_sections:
+                urls_by_section_lookup = dict(urls_by_section)
+                processed_urls = self._checkpoint.get("processed_urls")
+                processed_url_set = (
+                    {url for url in processed_urls if isinstance(url, str)}
+                    if isinstance(processed_urls, list)
+                    else set()
+                )
+                incremental_urls_by_section = {
+                    section: self._apply_page_offset(
+                        urljoin(base.rstrip("/") + "/", self._config.custom_paths[section].lstrip("/")),
+                        checkpoint_offsets.get(section),
+                    )
+                    for section in incremental_sections
+                }
+                urls = [
+                    incremental_urls_by_section.get(section, urls_by_section_lookup[section])
+                    for section in incremental_sections
+                ]
+                urls.extend(
+                    seed_url
+                    for section, seed_url in urls_by_section
+                    if section not in incremental_sections and seed_url not in processed_url_set
+                )
 
         # If a checkpoint records the last-seen page for pagination, resume
         last_meetings_page = self._checkpoint.get("last_meetings_page_url")
@@ -144,3 +174,19 @@ class IbabsConnector(SourceConnector):
                 links.append(absolute)
 
         return links
+
+    @staticmethod
+    def _apply_page_offset(url: str, offset_data: Any) -> str:
+        """Apply a stored checkpoint page offset to a section seed URL."""
+        if not isinstance(offset_data, dict):
+            return url
+
+        param = offset_data.get("param")
+        value = offset_data.get("value")
+        if not isinstance(param, str) or param == "" or value in (None, ""):
+            return url
+
+        parsed = urlparse(url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query[param] = str(value)
+        return urlunparse(parsed._replace(query=urlencode(query)))
