@@ -40,59 +40,87 @@ class Persoon(ODataEntity):
 
 
 class Fractie(ODataEntity):
-    """Typed OData model for the Fractie entity set."""
+    """Typed OData model for the Fractie entity set with shared OData fields only."""
+
+    pass
 
 
 class FractieZetel(ODataEntity):
-    """Typed OData model for the FractieZetel entity set."""
+    """Typed OData model for the FractieZetel entity set with shared OData fields only."""
+
+    pass
 
 
 class Commissie(ODataEntity):
-    """Typed OData model for the Commissie entity set."""
+    """Typed OData model for the Commissie entity set with shared OData fields only."""
+
+    pass
 
 
 class CommissieLid(ODataEntity):
-    """Typed OData model for the CommissieLid entity set."""
+    """Typed OData model for the CommissieLid entity set with shared OData fields only."""
+
+    pass
 
 
 class Vergadering(ODataEntity):
-    """Typed OData model for the Vergadering entity set."""
+    """Typed OData model for the Vergadering entity set with shared OData fields only."""
+
+    pass
 
 
 class Zaak(ODataEntity):
-    """Typed OData model for the Zaak entity set."""
+    """Typed OData model for the Zaak entity set with shared OData fields only."""
+
+    pass
 
 
 class ZaakActor(ODataEntity):
-    """Typed OData model for the ZaakActor entity set."""
+    """Typed OData model for the ZaakActor entity set with shared OData fields only."""
+
+    pass
 
 
 class Document(ODataEntity):
-    """Typed OData model for the Document entity set."""
+    """Typed OData model for the Document entity set with shared OData fields only."""
+
+    pass
 
 
 class DocumentActor(ODataEntity):
-    """Typed OData model for the DocumentActor entity set."""
+    """Typed OData model for the DocumentActor entity set with shared OData fields only."""
+
+    pass
 
 
 class Stemming(ODataEntity):
-    """Typed OData model for the Stemming entity set."""
+    """Typed OData model for the Stemming entity set with shared OData fields only."""
+
+    pass
 
 
 class Besluit(ODataEntity):
-    """Typed OData model for the Besluit entity set."""
+    """Typed OData model for the Besluit entity set with shared OData fields only."""
+
+    pass
 
 
 class Agendapunt(ODataEntity):
-    """Typed OData model for the Agendapunt entity set."""
+    """Typed OData model for the Agendapunt entity set with shared OData fields only."""
+
+    pass
 
 
 class Activiteit(ODataEntity):
-    """Typed OData model for the Activiteit entity set."""
+    """Typed OData model for the Activiteit entity set with shared OData fields only."""
+
+    pass
 
 
 class Kamerstukdossier(ODataEntity):
-    """Typed OData model for the Kamerstukdossier entity set."""
+    """Typed OData model for the Kamerstukdossier entity set with shared OData fields only."""
+
+    pass
 
 
 ENTITY_SET_MODELS: dict[str, type[ODataEntity]] = {
@@ -188,9 +216,19 @@ class ODataClient:
             response = await self._client.get(next_url, params=params)
             response.raise_for_status()
             payload = response.json()
-            items.extend(cast(TEntity, model_type.model_validate(raw_item)) for raw_item in payload.get("value", []))
+            page_items = [
+                cast(TEntity, model_type.model_validate(raw_item))
+                for raw_item in payload.get("value", [])
+            ]
+            items.extend(page_items)
             next_link = payload.get("@odata.nextLink")
-            next_url = urljoin(self._base_url, next_link) if isinstance(next_link, str) else None
+            if isinstance(next_link, str):
+                if next_link.startswith(("http://", "https://")):
+                    next_url = next_link
+                else:
+                    next_url = urljoin(self._base_url, next_link)
+            else:
+                next_url = None
             params = None
 
         return items
