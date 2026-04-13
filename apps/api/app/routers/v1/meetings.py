@@ -1,6 +1,6 @@
 """Meeting endpoints."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
 from curia_domain.db.models import GoverningBodyRow, MeetingRow
@@ -40,9 +40,15 @@ async def list_meetings(
     if status is not None:
         stmt = stmt.where(MeetingRow.status == status)
     if start_date_from is not None:
-        stmt = stmt.where(MeetingRow.scheduled_start >= start_date_from)
+        start_datetime_from = datetime.combine(start_date_from, time.min, tzinfo=UTC)
+        stmt = stmt.where(MeetingRow.scheduled_start >= start_datetime_from)
     if start_date_to is not None:
-        stmt = stmt.where(MeetingRow.scheduled_start < start_date_to + timedelta(days=1))
+        start_datetime_to = datetime.combine(
+            start_date_to + timedelta(days=1),
+            time.min,
+            tzinfo=UTC,
+        )
+        stmt = stmt.where(MeetingRow.scheduled_start < start_datetime_to)
 
     return await fetch_paginated(db, stmt, MeetingResponse, limit=limit, offset=offset)
 

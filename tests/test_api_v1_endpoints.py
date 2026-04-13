@@ -48,6 +48,8 @@ class SeededIds:
     institution_1: uuid.UUID
     institution_2: uuid.UUID
     meeting_1: uuid.UUID
+    meeting_3: uuid.UUID
+    meeting_4: uuid.UUID
     agenda_item_1: uuid.UUID
     document_1: uuid.UUID
     motion_1: uuid.UUID
@@ -180,7 +182,21 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             status="cancelled",
             source_id=source_2.id,
         )
-        session.add_all([meeting_1, meeting_2])
+        meeting_3 = MeetingRow(
+            governing_body_id=governing_body_1.id,
+            title="Alpha End Of Month Meeting",
+            scheduled_start=datetime(2024, 1, 31, 23, 59, tzinfo=UTC),
+            status="completed",
+            source_id=source_1.id,
+        )
+        meeting_4 = MeetingRow(
+            governing_body_id=governing_body_1.id,
+            title="Alpha Next Day Meeting",
+            scheduled_start=datetime(2024, 2, 1, 0, 0, tzinfo=UTC),
+            status="completed",
+            source_id=source_1.id,
+        )
+        session.add_all([meeting_1, meeting_2, meeting_3, meeting_4])
         await session.flush()
 
         agenda_item_1 = AgendaItemRow(meeting_id=meeting_1.id, ordering=1, title="Alpha Agenda Item")
@@ -358,6 +374,8 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             institution_1=institution_1.id,
             institution_2=institution_2.id,
             meeting_1=meeting_1.id,
+            meeting_3=meeting_3.id,
+            meeting_4=meeting_4.id,
             agenda_item_1=agenda_item_1.id,
             document_1=document_1.id,
             motion_1=motion_1.id,
@@ -422,7 +440,7 @@ ListQueryBuilder = Callable[[SeededIds], dict[str, str]]
                 "institution_id": str(ids.institution_1),
                 "status": "completed",
                 "start_date_from": "2024-01-01",
-                "start_date_to": "2024-01-31",
+                "start_date_to": "2024-01-30",
             },
             "meeting_1",
         ),
@@ -574,6 +592,31 @@ async def test_limit_offset_pagination_metadata(api_client: AsyncClient, seeded_
     assert payload["page_size"] == 1
     assert payload["pages"] == 2
     assert [item["id"] for item in payload["items"]] == [str(seeded_ids.institution_2)]
+
+
+@pytest.mark.asyncio
+async def test_meetings_date_filters_use_utc_datetime_boundaries(
+    api_client: AsyncClient,
+    seeded_ids: SeededIds,
+) -> None:
+    """Meeting date filters should use explicit UTC datetime boundaries."""
+    response = await api_client.get(
+        "/api/v1/meetings",
+        params={
+            "institution_id": str(seeded_ids.institution_1),
+            "status": "completed",
+            "start_date_from": "2024-01-31",
+            "start_date_to": "2024-01-31",
+            "limit": "10",
+            "offset": "0",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert [item["id"] for item in payload["items"]] == [str(seeded_ids.meeting_3)]
+    assert str(seeded_ids.meeting_4) not in {item["id"] for item in payload["items"]}
 
 
 @pytest.mark.parametrize(
