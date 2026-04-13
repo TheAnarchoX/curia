@@ -59,11 +59,7 @@ class IbabsConnector(SourceConnector):
 
         checkpoint_offsets = self._checkpoint.get("page_offsets")
         if self._checkpoint.get("last_synced_at") and isinstance(checkpoint_offsets, dict):
-            incremental_sections = [
-                section
-                for section, _ in urls_by_section
-                if section in INCREMENTAL_SYNC_SECTIONS
-            ]
+            incremental_sections = [section for section, _ in urls_by_section if section in INCREMENTAL_SYNC_SECTIONS]
             if incremental_sections:
                 incremental_urls_by_section = {
                     section: self._apply_page_offset(

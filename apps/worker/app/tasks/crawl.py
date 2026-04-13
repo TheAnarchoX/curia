@@ -400,9 +400,7 @@ def persist_page(sync_state: dict[str, Any]) -> dict[str, Any]:
         return _set_page_error(state, "persist", "missing mapped entities")
 
     try:
-        persist_result, checkpoint = asyncio.run(
-            _persist_mapped_page_async(state, parse_payload, mapped_entities)
-        )
+        persist_result, checkpoint = asyncio.run(_persist_mapped_page_async(state, parse_payload, mapped_entities))
     except (SQLAlchemyError, ValueError) as exc:
         logger.exception("Unhandled persist failure for %s", state.get("current_url"))
         return _set_page_error(state, "persist", str(exc))
