@@ -33,6 +33,10 @@ from apps.api.app.schemas.common import PaginatedResponse
 router = APIRouter(prefix="/search", tags=["search"])
 
 _DUTCH_CONFIG: Any = literal_column("'dutch'")
+_SNIPPET_MAX_LENGTH = 280
+_SCORE_EXACT_MATCH = 100.0
+_SCORE_PREFIX_MATCH = 50.0
+_SCORE_CONTAINS = 10.0
 
 
 class SearchEntityType(StrEnum):
@@ -85,7 +89,7 @@ def _search_snippet(expression: Any | None) -> Any:
         return cast(literal(None), String())
 
     return func.nullif(
-        func.substr(func.trim(func.coalesce(cast(expression, String), "")), 1, 280),
+        func.substr(func.trim(func.coalesce(cast(expression, String), "")), 1, _SNIPPET_MAX_LENGTH),
         "",
     )
 
@@ -141,9 +145,9 @@ def _build_search_select(
         lowered_title = func.lower(func.coalesce(cast(title_expression, String), ""))
         lowered_search = func.lower(search_expression)
         score = case(
-            (lowered_title == query_text.lower(), 100.0),
-            (lowered_title.like(f"{query_text.lower()}%"), 50.0),
-            (lowered_search.like(query_pattern), 10.0),
+            (lowered_title == query_text.lower(), _SCORE_EXACT_MATCH),
+            (lowered_title.like(f"{query_text.lower()}%"), _SCORE_PREFIX_MATCH),
+            (lowered_search.like(query_pattern), _SCORE_CONTAINS),
             else_=0.0,
         )
         stmt = stmt.add_columns(cast(score, Float).label("score")).where(lowered_search.like(query_pattern))
@@ -190,7 +194,7 @@ async def search(
         GoverningBodyRow.__table__,
         MeetingRow.governing_body_id == GoverningBodyRow.id,
     )
-    proposition_join = MeetingRow.__table__.outerjoin(
+    meeting_governing_body_join = MeetingRow.__table__.outerjoin(
         GoverningBodyRow.__table__,
         MeetingRow.governing_body_id == GoverningBodyRow.id,
     )
@@ -325,7 +329,7 @@ async def search(
             query_text=query_text,
             entity_type=SearchEntityType.motion,
             from_clause=MotionRow.__table__.outerjoin(
-                proposition_join,
+                meeting_governing_body_join,
                 MotionRow.meeting_id == MeetingRow.id,
             ),
             id_expression=MotionRow.id,
@@ -345,7 +349,7 @@ async def search(
             query_text=query_text,
             entity_type=SearchEntityType.amendment,
             from_clause=AmendmentRow.__table__.outerjoin(
-                proposition_join,
+                meeting_governing_body_join,
                 AmendmentRow.meeting_id == MeetingRow.id,
             ),
             id_expression=AmendmentRow.id,
@@ -365,7 +369,7 @@ async def search(
             query_text=query_text,
             entity_type=SearchEntityType.written_question,
             from_clause=WrittenQuestionRow.__table__.outerjoin(
-                proposition_join,
+                meeting_governing_body_join,
                 WrittenQuestionRow.meeting_id == MeetingRow.id,
             ),
             id_expression=WrittenQuestionRow.id,
@@ -389,7 +393,7 @@ async def search(
             query_text=query_text,
             entity_type=SearchEntityType.promise,
             from_clause=PromiseRow.__table__.outerjoin(
-                proposition_join,
+                meeting_governing_body_join,
                 PromiseRow.meeting_id == MeetingRow.id,
             ),
             id_expression=PromiseRow.id,
