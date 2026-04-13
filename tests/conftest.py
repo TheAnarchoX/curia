@@ -18,9 +18,11 @@ from apps.api.app.main import create_app
 @pytest.fixture
 def app_settings() -> Settings:
     """Return deterministic settings for app smoke tests."""
-    return Settings(
-        debug=True,
-        cors_origins=["http://localhost:3000", "https://example.com"],
+    return Settings.model_validate(
+        {
+            "debug": True,
+            "cors_origins": ["http://localhost:3000", "https://example.com"],
+        }
     )
 
 
