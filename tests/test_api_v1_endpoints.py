@@ -121,6 +121,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             name="Alpha Council",
             slug="alpha-council",
             institution_type="council",
+            description="Alpha council for housing and zoning",
         )
         institution_2 = InstitutionRow(
             jurisdiction_id=jurisdiction_2.id,
@@ -153,7 +154,11 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             scope_level="province",
             active_from=date(2022, 1, 1),
         )
-        politician_1 = PoliticianRow(full_name="Jane Example", family_name="Example")
+        politician_1 = PoliticianRow(
+            full_name="Jane Example",
+            family_name="Example",
+            notes="Alpha coalition spokesperson",
+        )
         politician_2 = PoliticianRow(full_name="John Other", family_name="Other")
 
         session.add_all(
@@ -208,6 +213,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             title="Alpha Report",
             document_type="report",
             text_extracted=True,
+            text_content="Alpha housing report covering zoning and budget plans.",
             meeting_id=meeting_1.id,
             agenda_item_id=agenda_item_1.id,
             source_url="https://example.com/alpha-report",
@@ -225,6 +231,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
 
         motion_1 = MotionRow(
             title="Alpha Motion",
+            body="Alpha housing motion on zoning policy.",
             meeting_id=meeting_1.id,
             agenda_item_id=agenda_item_1.id,
             status="adopted",
@@ -239,6 +246,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
         )
         amendment_1 = AmendmentRow(
             title="Alpha Amendment",
+            body="Alpha housing amendment for the zoning proposal.",
             target_document_id=document_1.id,
             meeting_id=meeting_1.id,
             agenda_item_id=agenda_item_1.id,
@@ -255,6 +263,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
         )
         question_1 = WrittenQuestionRow(
             title="Alpha Question",
+            body="Alpha housing question for the mayor.",
             addressee="Mayor",
             meeting_id=meeting_1.id,
             status="submitted",
@@ -269,6 +278,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
         )
         promise_1 = PromiseRow(
             title="Alpha Promise",
+            body="Alpha housing promise to deliver a zoning update.",
             maker_id=politician_1.id,
             meeting_id=meeting_1.id,
             status="pending",
@@ -617,6 +627,94 @@ async def test_meetings_date_filters_use_utc_datetime_boundaries(
 
     assert [item["id"] for item in payload["items"]] == [str(seeded_ids.meeting_3)]
     assert str(seeded_ids.meeting_4) not in {item["id"] for item in payload["items"]}
+
+
+@pytest.mark.asyncio
+async def test_search_returns_cross_entity_results(api_client: AsyncClient) -> None:
+    """Search should return ranked results across all supported entity types."""
+    response = await api_client.get("/api/v1/search", params={"q": "alpha", "limit": "20", "offset": "0"})
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["total"] >= 10
+    assert payload["page"] == 1
+    assert payload["page_size"] == 20
+    assert payload["pages"] == 1
+    assert {
+        "institution",
+        "party",
+        "politician",
+        "meeting",
+        "agenda_item",
+        "document",
+        "motion",
+        "amendment",
+        "written_question",
+        "promise",
+    } <= {item["entity_type"] for item in payload["items"]}
+    assert payload["items"][0]["score"] >= payload["items"][-1]["score"]
+
+
+@pytest.mark.asyncio
+async def test_search_filters_and_paginate_results(api_client: AsyncClient, seeded_ids: SeededIds) -> None:
+    """Search should support entity type, date range, institution, and pagination filters."""
+    page_1 = await api_client.get(
+        "/api/v1/search",
+        params={
+            "q": "alpha",
+            "entity_type": ["motion", "written_question"],
+            "date_from": "2024-01-16",
+            "date_to": "2024-01-18",
+            "institution_id": str(seeded_ids.institution_1),
+            "limit": "1",
+            "offset": "0",
+        },
+    )
+
+    assert page_1.status_code == 200
+    payload_1 = page_1.json()
+
+    assert payload_1["total"] == 2
+    assert payload_1["page"] == 1
+    assert payload_1["page_size"] == 1
+    assert payload_1["pages"] == 2
+    assert payload_1["items"] == [
+        {
+            "entity_type": "motion",
+            "entity_id": str(seeded_ids.motion_1),
+            "title": "Alpha Motion",
+            "snippet": "Alpha housing motion on zoning policy.",
+            "score": payload_1["items"][0]["score"],
+        }
+    ]
+
+    page_2 = await api_client.get(
+        "/api/v1/search",
+        params={
+            "q": "alpha",
+            "entity_type": ["motion", "written_question"],
+            "date_from": "2024-01-16",
+            "date_to": "2024-01-18",
+            "institution_id": str(seeded_ids.institution_1),
+            "limit": "1",
+            "offset": "1",
+        },
+    )
+
+    assert page_2.status_code == 200
+    payload_2 = page_2.json()
+
+    assert payload_2["page"] == 2
+    assert payload_2["items"] == [
+        {
+            "entity_type": "written_question",
+            "entity_id": str(seeded_ids.question_1),
+            "title": "Alpha Question",
+            "snippet": "Alpha housing question for the mayor.",
+            "score": payload_2["items"][0]["score"],
+        }
+    ]
 
 
 @pytest.mark.parametrize(
