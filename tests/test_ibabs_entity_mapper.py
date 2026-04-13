@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import curia_domain.db.models as _models  # noqa: F401
@@ -31,21 +32,40 @@ from sqlalchemy.ext.asyncio import (
 )
 
 # ---------------------------------------------------------------------------
-# SQLite compatibility — render PostgreSQL-only types as TEXT
-# ---------------------------------------------------------------------------
-
-SQLiteTypeCompiler.visit_ARRAY = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
-SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
-
-# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 GOVERNING_BODY_ID = uuid.uuid4()
 
 
+@pytest.fixture(autouse=True)
+def _patch_sqlite_type_compiler() -> AsyncIterator[None]:
+    """Temporarily patch SQLiteTypeCompiler to handle PostgreSQL-only types.
+
+    This avoids leaking the patch into unrelated tests that may rely on the
+    default compiler behaviour in the same pytest process.
+    """
+    orig_array = getattr(SQLiteTypeCompiler, "visit_ARRAY", None)
+    orig_jsonb = getattr(SQLiteTypeCompiler, "visit_JSONB", None)
+
+    SQLiteTypeCompiler.visit_ARRAY = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
+    SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "TEXT"  # type: ignore[assignment]
+
+    yield
+
+    # Restore originals (or delete if they didn't exist).
+    if orig_array is None:
+        delattr(SQLiteTypeCompiler, "visit_ARRAY")
+    else:
+        SQLiteTypeCompiler.visit_ARRAY = orig_array  # type: ignore[assignment]
+    if orig_jsonb is None:
+        delattr(SQLiteTypeCompiler, "visit_JSONB")
+    else:
+        SQLiteTypeCompiler.visit_JSONB = orig_jsonb  # type: ignore[assignment]
+
+
 @pytest.fixture
-async def async_session() -> AsyncSession:  # type: ignore[misc]
+async def async_session() -> AsyncIterator[AsyncSession]:
     """Yield an async SQLAlchemy session backed by in-memory SQLite."""
     engine = create_async_engine("sqlite+aiosqlite://", echo=False)
 
@@ -253,6 +273,13 @@ async def test_upsert_meeting_creates_new_row(async_session: AsyncSession) -> No
     ).scalar_one()
     assert row.title == "Council Meeting 2024-01-15"
     assert row.governing_body_id == GOVERNING_BODY_ID
+    # _parse_datetime normalises date-only strings to tz-aware UTC, but
+    # SQLite strips tzinfo on storage/retrieval so we cannot assert
+    # tzinfo on the row itself — verify the helper directly instead.
+    assert row.scheduled_start is not None
+    parsed = IbabsEntityMapper._parse_datetime("2024-01-15")
+    assert parsed is not None
+    assert parsed.tzinfo is not None
 
 
 async def test_upsert_meeting_does_not_duplicate(async_session: AsyncSession) -> None:
@@ -485,6 +512,75 @@ async def test_upsert_vote_creates_decision_and_vote(
     assert votes[0].outcome == "adopted"
 
 
+async def test_upsert_vote_partial_update_preserves_fields(
+    async_session: AsyncSession,
+) -> None:
+    """A vote re-crawl with missing fields should not overwrite stored values."""
+    mapper = IbabsEntityMapper(async_session, GOVERNING_BODY_ID)
+
+    meeting_url = "https://test.ibabs.eu/meeting/partial-vote"
+    await mapper.map_and_persist(
+        _make_parse_result(
+            [
+                ParsedEntity(
+                    entity_type="meeting_summary",
+                    source_url="https://test.ibabs.eu",
+                    external_id="mtg-partial",
+                    data={"title": "Partial Vote Meeting", "date": "2024-04-01", "url": meeting_url},
+                ),
+            ]
+        )
+    )
+
+    # First crawl — full payload.
+    await mapper.map_and_persist(
+        _make_parse_result(
+            [
+                ParsedEntity(
+                    entity_type="vote",
+                    source_url="https://test.ibabs.eu",
+                    external_id="vote-partial",
+                    data={
+                        "meeting_source_url": meeting_url,
+                        "description": "Partial test",
+                        "outcome": "adopted",
+                        "votes_for": 15,
+                        "votes_against": 5,
+                        "votes_abstain": 2,
+                    },
+                ),
+            ]
+        )
+    )
+
+    # Second crawl — only outcome present.
+    r2 = await mapper.map_and_persist(
+        _make_parse_result(
+            [
+                ParsedEntity(
+                    entity_type="vote",
+                    source_url="https://test.ibabs.eu",
+                    external_id="vote-partial",
+                    data={
+                        "meeting_source_url": meeting_url,
+                        "description": "Partial test",
+                        "outcome": "rejected",
+                    },
+                ),
+            ]
+        )
+    )
+    assert r2.updated == 1
+
+    votes = (await async_session.execute(select(VoteRow))).scalars().all()
+    assert len(votes) == 1
+    assert votes[0].outcome == "rejected"
+    # votes_for/against/abstain should be preserved from the first crawl.
+    assert votes[0].votes_for == 15
+    assert votes[0].votes_against == 5
+    assert votes[0].votes_abstain == 2
+
+
 async def test_upsert_vote_without_meeting_records_error(
     async_session: AsyncSession,
 ) -> None:
@@ -503,6 +599,48 @@ async def test_upsert_vote_without_meeting_records_error(
     result = await mapper.map_and_persist(_make_parse_result([vote_entity]))
     assert result.errors
     assert "Cannot persist vote" in result.errors[0]
+
+
+# ---------------------------------------------------------------------------
+# Missing natural key validation
+# ---------------------------------------------------------------------------
+
+
+async def test_missing_natural_key_is_skipped_with_error(async_session: AsyncSession) -> None:
+    """Entities with empty or missing natural keys should be skipped, not inserted."""
+    mapper = IbabsEntityMapper(async_session, GOVERNING_BODY_ID)
+
+    pr = _make_parse_result(
+        [
+            ParsedEntity(
+                entity_type="party_roster",
+                source_url="https://test.ibabs.eu",
+                external_id="empty-party",
+                data={"party_name": "", "abbreviation": "X"},
+            ),
+            ParsedEntity(
+                entity_type="member_roster",
+                source_url="https://test.ibabs.eu",
+                external_id="no-name",
+                data={"role": "raadslid"},
+            ),
+            ParsedEntity(
+                entity_type="meeting_summary",
+                source_url="https://test.ibabs.eu",
+                external_id="no-url",
+                data={"title": "Meeting without URL"},
+            ),
+        ]
+    )
+
+    result = await mapper.map_and_persist(pr)
+    assert result.created == 0
+    assert result.skipped == 3
+    assert len(result.errors) == 3
+
+    # No rows should have been created.
+    parties = (await async_session.execute(select(PartyRow))).scalars().all()
+    assert len(parties) == 0
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from curia_domain.db.models import (
     DecisionRow,
@@ -53,6 +53,23 @@ class EntityMapResult:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+class _MissingKey(Exception):
+    """Raised when a required natural key is missing from entity data."""
+
+
+def _require_key(data: dict[str, object], key: str, label: str) -> str:
+    """Return a non-empty string value for *key* or raise ``_MissingKey``."""
+    value = data.get(key)
+    if not value or not isinstance(value, str) or not value.strip():
+        raise _MissingKey(f"Missing required key '{key}' for {label}")
+    return value.strip()
+
+
+# ---------------------------------------------------------------------------
 # Entity mapper — ParseResult → ORM rows
 # ---------------------------------------------------------------------------
 
@@ -64,6 +81,11 @@ class IbabsEntityMapper:
     row by a natural key (e.g. party name, meeting source URL) and either
     creates a new row or updates the existing one.  This ensures re-crawling
     the same pages does not produce duplicate records.
+
+    After each successful insert the session is flushed so that subsequent
+    selects within the same batch can see newly created rows and so that
+    DB-level constraint violations are caught per-entity rather than aborting
+    the entire batch.
     """
 
     def __init__(
@@ -101,14 +123,20 @@ class IbabsEntityMapper:
 
             try:
                 created = await handler(entity)
+                # Flush after each entity so that subsequent selects see
+                # newly inserted rows and DB constraint errors surface
+                # inside the per-entity try/except.
+                await self._session.flush()
                 if created:
                     result.created += 1
                 else:
                     result.updated += 1
+            except _MissingKey as exc:
+                result.skipped += 1
+                result.errors.append(f"Skipped {entity.entity_type} ({entity.external_id}): {exc}")
             except Exception as exc:  # noqa: BLE001
                 result.errors.append(f"Error mapping {entity.entity_type} ({entity.external_id}): {exc}")
 
-        await self._session.flush()
         return result
 
     # ------------------------------------------------------------------
@@ -117,7 +145,7 @@ class IbabsEntityMapper:
 
     async def _upsert_party(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        name: str = data.get("party_name", "")
+        name = _require_key(data, "party_name", "party")
 
         stmt = select(PartyRow).where(PartyRow.name == name)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -140,7 +168,7 @@ class IbabsEntityMapper:
 
     async def _upsert_politician(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        full_name: str = data.get("name", "")
+        full_name = _require_key(data, "name", "politician")
 
         stmt = select(PoliticianRow).where(PoliticianRow.full_name == full_name)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -163,7 +191,7 @@ class IbabsEntityMapper:
 
     async def _upsert_meeting(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        source_url: str = data.get("url", "")
+        source_url = _require_key(data, "url", "meeting")
 
         stmt = select(MeetingRow).where(MeetingRow.source_url == source_url)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -199,7 +227,7 @@ class IbabsEntityMapper:
 
     async def _upsert_document(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        source_url: str = data.get("url", "")
+        source_url = _require_key(data, "url", "document")
 
         stmt = select(DocumentRow).where(DocumentRow.source_url == source_url)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -228,7 +256,7 @@ class IbabsEntityMapper:
 
     async def _upsert_motion(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        title: str = data.get("title", "")
+        title = _require_key(data, "title", "motion")
 
         stmt = select(MotionRow).where(MotionRow.title == title)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -254,15 +282,13 @@ class IbabsEntityMapper:
 
     async def _upsert_vote(self, entity: ParsedEntity) -> bool:
         data = entity.data
-        meeting_source_url: str = data.get("meeting_source_url", "")
+        meeting_source_url = _require_key(data, "meeting_source_url", "vote")
 
         # Resolve the meeting this vote belongs to.
-        meeting_row: MeetingRow | None = None
-        if meeting_source_url:
-            stmt = select(MeetingRow).where(
-                MeetingRow.source_url == meeting_source_url,
-            )
-            meeting_row = (await self._session.execute(stmt)).scalar_one_or_none()
+        stmt = select(MeetingRow).where(
+            MeetingRow.source_url == meeting_source_url,
+        )
+        meeting_row = (await self._session.execute(stmt)).scalar_one_or_none()
 
         if meeting_row is None:
             raise ValueError(
@@ -303,10 +329,16 @@ class IbabsEntityMapper:
             self._session.add(vote_row)
             return True
 
-        vote_row.outcome = data.get("outcome")
-        vote_row.votes_for = data.get("votes_for")
-        vote_row.votes_against = data.get("votes_against")
-        vote_row.votes_abstain = data.get("votes_abstain")
+        # Only update fields that are explicitly present in data to avoid
+        # overwriting previously stored values with None on partial re-crawls.
+        if "outcome" in data:
+            vote_row.outcome = data["outcome"]
+        if "votes_for" in data:
+            vote_row.votes_for = data["votes_for"]
+        if "votes_against" in data:
+            vote_row.votes_against = data["votes_against"]
+        if "votes_abstain" in data:
+            vote_row.votes_abstain = data["votes_abstain"]
         return False
 
     # ------------------------------------------------------------------
@@ -314,14 +346,23 @@ class IbabsEntityMapper:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_datetime(value: str | None) -> datetime | None:
-        """Best-effort ISO-8601 datetime/date parsing."""
-        if not value:
+    def _parse_datetime(value: object) -> datetime | None:
+        """Best-effort ISO-8601 datetime/date parsing.
+
+        Always returns a timezone-aware datetime (UTC) to satisfy
+        PostgreSQL ``timestamptz`` columns, or ``None`` when the input
+        cannot be parsed.
+        """
+        if not value or not isinstance(value, str):
             return None
         try:
-            return datetime.fromisoformat(value)
+            dt = datetime.fromisoformat(value)
         except (ValueError, TypeError):
             return None
+        # Normalise naive datetimes (e.g. date-only "2024-01-15") to UTC.
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt
 
 
 class IbabsCanonicalMapper:
