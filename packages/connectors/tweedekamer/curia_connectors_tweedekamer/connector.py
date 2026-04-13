@@ -151,11 +151,7 @@ class TweedeKamerConnector(SourceConnector):
 
             result.fetched_people = len(people)
             result.fetched_parties = len(parties)
-            result.fetched_memberships = sum(
-                len(seat.fractiezetel_persoon)
-                for seat in seats
-                if not seat.verwijderd
-            )
+            result.fetched_memberships = sum(len(seat.fractiezetel_persoon) for seat in seats if not seat.verwijderd)
 
             party_rows_by_id: dict[uuid.UUID, PartyRow] = {}
             politician_rows_by_id: dict[uuid.UUID, PoliticianRow] = {}
@@ -212,11 +208,9 @@ class TweedeKamerConnector(SourceConnector):
     @staticmethod
     def _build_politician(person: Persoon) -> Politician | None:
         given_name = person.roepnaam or person.voornamen
-        family_name = " ".join(
-            part
-            for part in (person.tussenvoegsel, person.achternaam)
-            if part and part.strip()
-        ) or None
+        family_name = (
+            " ".join(part for part in (person.tussenvoegsel, person.achternaam) if part and part.strip()) or None
+        )
         full_name = " ".join(part for part in (given_name, family_name) if part)
 
         if not full_name:
@@ -305,17 +299,17 @@ class TweedeKamerConnector(SourceConnector):
             return None, PoliticianRow(full_name="")
 
         candidates = (
-            await session.execute(
-                select(PoliticianRow).where(PoliticianRow.full_name == politician.full_name),
+            (
+                await session.execute(
+                    select(PoliticianRow).where(PoliticianRow.full_name == politician.full_name),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         row = next(
-            (
-                candidate
-                for candidate in candidates
-                if candidate.date_of_birth == politician.date_of_birth
-            ),
+            (candidate for candidate in candidates if candidate.date_of_birth == politician.date_of_birth),
             candidates[0] if candidates else None,
         )
         if row is None:

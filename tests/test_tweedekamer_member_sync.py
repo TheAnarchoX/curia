@@ -228,9 +228,7 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert parties[0].active_from == date(2001, 1, 1)
     assert parties[1].active_until == date(2024, 12, 31)
 
-    politicians = (
-        await async_session.execute(select(PoliticianRow).order_by(PoliticianRow.full_name))
-    ).scalars().all()
+    politicians = (await async_session.execute(select(PoliticianRow).order_by(PoliticianRow.full_name))).scalars().all()
     assert [politician.full_name for politician in politicians] == ["Myrthe Bikker", "Pieter van Vliet"]
     assert politicians[0].gender == "vrouw"
     assert politicians[1].notes == "Voormalig Kamerlid"
