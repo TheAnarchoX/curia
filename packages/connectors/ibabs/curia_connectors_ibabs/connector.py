@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
 from curia_ingestion.client import CrawlerClient
 from curia_ingestion.interfaces import (
@@ -54,6 +54,19 @@ class IbabsConnector(SourceConnector):
             if section in self._config.known_capabilities:
                 seed_url = urljoin(base.rstrip("/") + "/", path.lstrip("/"))
                 urls.append(seed_url)
+
+        checkpoint_offsets = self._checkpoint.get("page_offsets")
+        if self._checkpoint.get("last_synced_at") and isinstance(checkpoint_offsets, dict):
+            incremental_urls = [
+                self._apply_page_offset(
+                    urljoin(base.rstrip("/") + "/", self._config.custom_paths[section].lstrip("/")),
+                    offset_data,
+                )
+                for section, offset_data in checkpoint_offsets.items()
+                if section in self._config.known_capabilities and section in self._config.custom_paths
+            ]
+            if incremental_urls:
+                return incremental_urls
 
         # If a checkpoint records the last-seen page for pagination, resume
         last_meetings_page = self._checkpoint.get("last_meetings_page_url")
@@ -144,3 +157,19 @@ class IbabsConnector(SourceConnector):
                 links.append(absolute)
 
         return links
+
+    @staticmethod
+    def _apply_page_offset(url: str, offset_data: Any) -> str:
+        """Apply a stored checkpoint page offset to a section seed URL."""
+        if not isinstance(offset_data, dict):
+            return url
+
+        param = offset_data.get("param")
+        value = offset_data.get("value")
+        if not isinstance(param, str) or param == "" or value in (None, "", 0, "0"):
+            return url
+
+        parsed = urlparse(url)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query[param] = str(value)
+        return urlunparse(parsed._replace(query=urlencode(query)))

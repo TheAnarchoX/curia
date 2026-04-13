@@ -7,8 +7,9 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import parse_qsl, urljoin, urlparse
 
-from curia_connectors_ibabs.config import IbabsSourceConfig
+from curia_connectors_ibabs.config import INCREMENTAL_SYNC_SECTIONS, IbabsSourceConfig
 from curia_connectors_ibabs.connector import IbabsConnector
 from curia_connectors_ibabs.mapper import IbabsEntityMapper
 from curia_connectors_ibabs.parsers import (
@@ -21,8 +22,10 @@ from curia_connectors_ibabs.parsers import (
     IbabsReportParser,
     IbabsSpeakerTimelineParser,
 )
+from curia_domain.db.models import SourceRow
 from curia_domain.db.session import async_session_factory
 from curia_ingestion.interfaces import CrawlConfig, CrawlResult, Parser, ParseResult
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from apps.worker.app.celery_app import celery_app
@@ -157,15 +160,55 @@ def _update_checkpoint(sync_state: dict[str, Any]) -> dict[str, Any]:
     current_url = sync_state["current_url"]
     if current_url not in processed_urls:
         processed_urls.append(current_url)
+    page_offsets = dict(checkpoint.get("page_offsets") or {})
+    section = _resolve_incremental_section(sync_state, current_url)
+    if section is not None:
+        page_offsets[section] = _extract_page_offset(current_url)
+    synced_at = datetime.now(UTC).isoformat()
     checkpoint.update(
         {
             "last_successful_page_url": current_url,
+            "last_synced_at": synced_at,
+            "page_offsets": page_offsets,
             "processed_urls": processed_urls,
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": synced_at,
         }
     )
     sync_state["checkpoint"] = checkpoint
     return sync_state
+
+
+def _resolve_incremental_section(sync_state: dict[str, Any], url: str) -> str | None:
+    connector_config = IbabsSourceConfig.model_validate(sync_state["connector"])
+    current_path = urlparse(url).path.rstrip("/") or "/"
+
+    for section in INCREMENTAL_SYNC_SECTIONS:
+        path = connector_config.custom_paths.get(section)
+        if path is None:
+            continue
+        section_url = urljoin(connector_config.base_url.rstrip("/") + "/", path.lstrip("/"))
+        section_path = urlparse(section_url).path.rstrip("/") or "/"
+        if current_path == section_path:
+            return section
+
+    return None
+
+
+def _extract_page_offset(url: str) -> dict[str, int | str]:
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+
+    for param in ("page", "pagina", "offset", "start"):
+        value = query.get(param)
+        if value in (None, ""):
+            continue
+        try:
+            parsed_value: int | str = int(value)
+        except ValueError:
+            parsed_value = value
+        return {"param": param, "value": parsed_value}
+
+    return {"param": "page", "value": 0}
 
 
 async def _crawl_page_async(sync_state: dict[str, Any], url: str) -> CrawlResult:
@@ -196,6 +239,27 @@ async def _persist_mapped_page_async(
         "skipped": map_result.skipped,
         "errors": list(map_result.errors),
     }
+
+
+async def _persist_checkpoint_async(sync_state: dict[str, Any]) -> None:
+    checkpoint = dict(sync_state.get("checkpoint") or {})
+    if not checkpoint:
+        return
+
+    try:
+        source_id = uuid.UUID(str(sync_state["source_id"]))
+    except (KeyError, TypeError, ValueError):
+        return
+
+    async with async_session_factory() as session:
+        source_row = await session.scalar(select(SourceRow).where(SourceRow.id == source_id))
+        if source_row is None:
+            return
+
+        source_config = dict(source_row.config or {})
+        source_config["checkpoint"] = checkpoint
+        source_row.config = source_config
+        await session.commit()
 
 
 @celery_app.task(name="crawl.run_crawl_job")
@@ -317,4 +381,9 @@ def persist_page(sync_state: dict[str, Any]) -> dict[str, Any]:
     state["persist_result"] = persist_result
     if not persist_result["errors"]:
         _update_checkpoint(state)
+        try:
+            asyncio.run(_persist_checkpoint_async(state))
+        except SQLAlchemyError as exc:
+            logger.exception("Unhandled checkpoint persistence failure for %s", state.get("current_url"))
+            return _set_page_error(state, "persist", str(exc))
     return state

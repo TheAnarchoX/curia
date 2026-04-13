@@ -11,7 +11,10 @@ from typing import Any
 from celery import Signature, chain
 from curia_connectors_ibabs.config import IbabsSourceConfig
 from curia_connectors_ibabs.connector import IbabsConnector
+from curia_domain.db.models import SourceRow
+from curia_domain.db.session import async_session_factory
 from curia_ingestion.interfaces import CrawlConfig
+from sqlalchemy import select
 
 from apps.worker.app.celery_app import celery_app
 from apps.worker.app.config import WorkerSettings
@@ -74,6 +77,24 @@ async def _discover_ibabs_pages(sync_state: dict[str, Any]) -> list[str]:
     return await connector.discover_pages(CrawlConfig.model_validate(sync_state["crawl_config"]))
 
 
+async def _load_persisted_checkpoint(source_id: str) -> dict[str, Any]:
+    try:
+        source_uuid = uuid.UUID(source_id)
+    except ValueError:
+        return {}
+
+    async with async_session_factory() as session:
+        source_row = await session.scalar(select(SourceRow).where(SourceRow.id == source_uuid))
+        if source_row is None or not isinstance(source_row.config, dict):
+            return {}
+
+        checkpoint = source_row.config.get("checkpoint")
+        if not isinstance(checkpoint, dict):
+            return {}
+
+        return dict(checkpoint)
+
+
 def build_ibabs_sync_signatures(sync_state: dict[str, Any], urls: Sequence[str]) -> list[Signature]:
     """Return the per-page crawl → parse → map → persist signature list."""
     signatures: list[Signature] = []
@@ -102,12 +123,15 @@ def sync_source(
     logger.info("Syncing source %s via iBabs pipeline", source_id)
 
     try:
+        persisted_checkpoint = asyncio.run(_load_persisted_checkpoint(source_id))
+        resolved_checkpoint = dict(persisted_checkpoint)
+        resolved_checkpoint.update(dict(checkpoint or {}))
         sync_state = _resolve_ibabs_sync_state(
             source_id=source_id,
             municipality_slug=municipality_slug,
             base_url=base_url,
             governing_body_id=governing_body_id,
-            checkpoint=checkpoint,
+            checkpoint=resolved_checkpoint,
         )
         urls = asyncio.run(_discover_ibabs_pages(sync_state))
     except Exception as exc:  # noqa: BLE001

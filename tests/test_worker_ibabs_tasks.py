@@ -2,16 +2,67 @@
 
 from __future__ import annotations
 
+import asyncio
+import uuid
+from collections.abc import Generator
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
+import curia_domain.db.models as _models  # noqa: F401
 import pytest
 from celery import Signature
+from curia_domain.db.base import Base
+from curia_domain.db.models import SourceRow
 from curia_ingestion.interfaces import CrawlResult, ParsedEntity, ParseResult
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from apps.worker.app.tasks.crawl import crawl_page, map_page, parse_page, persist_page
-from apps.worker.app.tasks.source_sync import build_ibabs_sync_signatures, sync_source
+from apps.worker.app.tasks.source_sync import (
+    _discover_ibabs_pages,
+    _resolve_ibabs_sync_state,
+    build_ibabs_sync_signatures,
+    sync_source,
+)
+
+
+@pytest.fixture(autouse=True)
+def _patch_sqlite_type_compiler() -> Generator[None, None, None]:
+    """Temporarily patch SQLiteTypeCompiler to handle PostgreSQL-only types."""
+    orig_array = getattr(SQLiteTypeCompiler, "visit_ARRAY", None)
+    orig_jsonb = getattr(SQLiteTypeCompiler, "visit_JSONB", None)
+
+    setattr(SQLiteTypeCompiler, "visit_ARRAY", lambda self, type_, **kw: "TEXT")
+    setattr(SQLiteTypeCompiler, "visit_JSONB", lambda self, type_, **kw: "TEXT")
+
+    yield
+
+    if orig_array is None:
+        delattr(SQLiteTypeCompiler, "visit_ARRAY")
+    else:
+        setattr(SQLiteTypeCompiler, "visit_ARRAY", orig_array)
+    if orig_jsonb is None:
+        delattr(SQLiteTypeCompiler, "visit_JSONB")
+    else:
+        setattr(SQLiteTypeCompiler, "visit_JSONB", orig_jsonb)
+
+
+@pytest.fixture
+def sqlite_session_factory() -> Generator[async_sessionmaker[AsyncSession], None, None]:
+    """Yield an async session factory backed by in-memory SQLite."""
+    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+
+    async def _create_schema() -> None:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    asyncio.run(_create_schema())
+
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    yield factory
+    asyncio.run(engine.dispose())
 
 
 def _sync_state() -> dict[str, Any]:
@@ -226,3 +277,102 @@ def test_pipeline_logs_page_errors_without_blocking_later_pages(
     assert recovered_state["checkpoint"]["last_successful_page_url"] == (
         "https://almelo.bestuurlijkeinformatie.nl/meetings"
     )
+
+
+def test_sync_source_persists_checkpoint_and_discovers_fewer_pages_on_rerun(
+    monkeypatch: pytest.MonkeyPatch,
+    sqlite_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A completed sync should persist an incremental checkpoint for the next run."""
+    source_id = uuid.uuid4()
+    governing_body_id = uuid.uuid4()
+    base_url = "https://almelo.bestuurlijkeinformatie.nl"
+
+    async def seed_source() -> None:
+        async with sqlite_session_factory() as session:
+            session.add(
+                SourceRow(
+                    id=source_id,
+                    name="Almelo iBabs",
+                    source_type="ibabs",
+                    base_url=base_url,
+                    config={},
+                )
+            )
+            await session.commit()
+
+    asyncio.run(seed_source())
+
+    monkeypatch.setattr("apps.worker.app.tasks.source_sync.async_session_factory", sqlite_session_factory)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl.async_session_factory", sqlite_session_factory)
+
+    def fake_chain(*signatures: Signature) -> Any:
+        class _FakeChain:
+            def apply_async(self) -> SimpleNamespace:
+                return SimpleNamespace(id="job-123")
+
+        return _FakeChain()
+
+    async def fake_crawl(sync_state: dict[str, Any], url: str) -> CrawlResult:
+        return _crawl_result(url)
+
+    def fake_parse(crawl_result: CrawlResult) -> ParseResult:
+        return _parse_result(crawl_result.url)
+
+    async def fake_persist(
+        sync_state: dict[str, Any],
+        parse_payload: dict[str, Any],
+        mapped_entities: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {"created": 1, "updated": 0, "skipped": 0, "errors": []}
+
+    monkeypatch.setattr("apps.worker.app.tasks.source_sync.chain", fake_chain)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._crawl_page_async", fake_crawl)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._parse_crawl_result", fake_parse)
+    monkeypatch.setattr("apps.worker.app.tasks.crawl._persist_mapped_page_async", fake_persist)
+
+    first_run = sync_source.run(
+        str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+    )
+    assert first_run["pages"] == 4
+
+    state = _resolve_ibabs_sync_state(
+        source_id=str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+        checkpoint={},
+    )
+    first_urls = asyncio.run(_discover_ibabs_pages(state))
+    assert len(first_urls) == first_run["pages"]
+
+    for url in first_urls:
+        state = crawl_page.run(state, url)
+        state = parse_page.run(state)
+        state = map_page.run(state)
+        state = persist_page.run(state)
+
+    async def load_source_row() -> SourceRow | None:
+        async with sqlite_session_factory() as session:
+            return await session.scalar(select(SourceRow).where(SourceRow.id == source_id))
+
+    persisted_source = asyncio.run(load_source_row())
+    assert persisted_source is not None
+    assert persisted_source.config is not None
+    assert persisted_source.config["checkpoint"]["last_synced_at"]
+    assert persisted_source.config["checkpoint"]["page_offsets"] == {
+        "meetings": {"param": "page", "value": 0},
+        "reports": {"param": "page", "value": 0},
+    }
+
+    second_run = sync_source.run(
+        str(source_id),
+        municipality_slug="almelo",
+        base_url=base_url,
+        governing_body_id=str(governing_body_id),
+    )
+
+    assert second_run["pages"] < first_run["pages"]
