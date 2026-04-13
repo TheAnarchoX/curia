@@ -196,7 +196,8 @@ class IbabsEntityMapper:
         stmt = select(MeetingRow).where(MeetingRow.source_url == source_url)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
 
-        scheduled_start = self._parse_datetime(data.get("date"))
+        date_value: str | None = data.get("date")
+        scheduled_start = self._parse_datetime(date_value)
         status = data.get("status", MeetingStatus.SCHEDULED)
 
         if row is None:
@@ -346,14 +347,14 @@ class IbabsEntityMapper:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_datetime(value: object) -> datetime | None:
+    def _parse_datetime(value: str | None) -> datetime | None:
         """Best-effort ISO-8601 datetime/date parsing.
 
         Always returns a timezone-aware datetime (UTC) to satisfy
         PostgreSQL ``timestamptz`` columns, or ``None`` when the input
         cannot be parsed.
         """
-        if not value or not isinstance(value, str):
+        if not value:
             return None
         try:
             dt = datetime.fromisoformat(value)

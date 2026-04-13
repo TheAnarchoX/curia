@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 
 import curia_domain.db.models as _models  # noqa: F401
@@ -39,7 +39,7 @@ GOVERNING_BODY_ID = uuid.uuid4()
 
 
 @pytest.fixture(autouse=True)
-def _patch_sqlite_type_compiler() -> AsyncIterator[None]:
+def _patch_sqlite_type_compiler() -> Iterator[None]:
     """Temporarily patch SQLiteTypeCompiler to handle PostgreSQL-only types.
 
     This avoids leaking the patch into unrelated tests that may rely on the
