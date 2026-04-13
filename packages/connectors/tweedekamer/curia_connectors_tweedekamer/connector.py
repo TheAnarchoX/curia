@@ -283,10 +283,10 @@ class TweedeKamerConnector(SourceConnector):
             session.add(row)
             return True, row
 
-        row.abbreviation = party.abbreviation or row.abbreviation
-        row.scope_level = party.scope_level or row.scope_level
-        row.active_from = party.active_from or row.active_from
-        row.active_until = party.active_until or row.active_until
+        row.abbreviation = party.abbreviation
+        row.scope_level = party.scope_level
+        row.active_from = party.active_from
+        row.active_until = party.active_until
         return False, row
 
     @staticmethod
@@ -310,8 +310,15 @@ class TweedeKamerConnector(SourceConnector):
 
         row = next(
             (candidate for candidate in candidates if candidate.date_of_birth == politician.date_of_birth),
-            candidates[0] if candidates else None,
+            None,
         )
+        if (
+            row is None
+            and politician.date_of_birth is None
+            and len(candidates) == 1
+            and candidates[0].date_of_birth is None
+        ):
+            row = candidates[0]
         if row is None:
             row = PoliticianRow(
                 full_name=politician.full_name,
@@ -325,12 +332,12 @@ class TweedeKamerConnector(SourceConnector):
             session.add(row)
             return True, row
 
-        row.given_name = politician.given_name or row.given_name
-        row.family_name = politician.family_name or row.family_name
-        row.initials = politician.initials or row.initials
-        row.gender = politician.gender or row.gender
-        row.date_of_birth = politician.date_of_birth or row.date_of_birth
-        row.notes = politician.notes or row.notes
+        row.given_name = politician.given_name
+        row.family_name = politician.family_name
+        row.initials = politician.initials
+        row.gender = politician.gender
+        row.date_of_birth = politician.date_of_birth
+        row.notes = politician.notes
         return False, row
 
     @staticmethod
