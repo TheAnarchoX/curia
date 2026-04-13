@@ -1,6 +1,6 @@
 """Meeting endpoints."""
 
-from datetime import date
+from datetime import date, timedelta
 from uuid import UUID
 
 from curia_domain.db.models import GoverningBodyRow, MeetingRow
@@ -42,7 +42,7 @@ async def list_meetings(
     if start_date_from is not None:
         stmt = stmt.where(MeetingRow.scheduled_start >= start_date_from)
     if start_date_to is not None:
-        stmt = stmt.where(MeetingRow.scheduled_start < date.fromordinal(start_date_to.toordinal() + 1))
+        stmt = stmt.where(MeetingRow.scheduled_start < start_date_to + timedelta(days=1))
 
     return await fetch_paginated(db, stmt, MeetingResponse, limit=limit, offset=offset)
 
