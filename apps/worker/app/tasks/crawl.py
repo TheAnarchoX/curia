@@ -174,7 +174,7 @@ def _checkpoint_page_offsets(checkpoint: Mapping[str, Any]) -> dict[str, dict[st
         return {}
 
     return {
-        section: dict(offset_data)
+        section: {key: value for key, value in offset_data.items() if isinstance(key, str)}
         for section, offset_data in page_offsets.items()
         if isinstance(section, str) and isinstance(offset_data, Mapping)
     }
