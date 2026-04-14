@@ -15,6 +15,7 @@ Key entities:
 from __future__ import annotations
 
 import asyncio
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -75,12 +76,12 @@ class MemberPartySyncResult:
 
     @property
     def updated(self) -> int:
-        """Backward-compatible alias for matched existing rows."""
+        """Deprecated alias for ``existing`` kept for backward compatibility."""
         return self.existing
 
     @updated.setter
     def updated(self, value: int) -> None:
-        """Backward-compatible alias for matched existing rows."""
+        """Deprecated alias for ``existing`` kept for backward compatibility."""
         self.existing = value
 
 
@@ -430,10 +431,15 @@ class TweedeKamerConnector(SourceConnector):
         if not value:
             return MandateRole.MEMBER
 
-        normalised = value.strip().lower()
-        if "ondervoorzitter" in normalised or "vice" in normalised:
+        normalised = re.sub(r"[-\s]+", " ", value.strip().lower())
+        tokens = set(normalised.split())
+        if (
+            "ondervoorzitter" in normalised
+            or "vicevoorzitter" in normalised
+            or ("vice" in tokens and "voorzitter" in tokens)
+        ):
             return MandateRole.VICE_CHAIR
-        if "voorzitter" in normalised and "onder" not in normalised:
+        if "voorzitter" in normalised:
             return MandateRole.CHAIR
         if "secretaris" in normalised:
             return MandateRole.SECRETARY
@@ -454,18 +460,13 @@ class TweedeKamerConnector(SourceConnector):
     ) -> dict[str, PartyRow]:
         names = {
             party.name
-            for party in (
-                TweedeKamerConnector._build_party(fractie)
-                for fractie in parties
-            )
+            for party in (TweedeKamerConnector._build_party(fractie) for fractie in parties)
             if party is not None
         }
         if not names:
             return {}
 
-        rows = (
-            await session.execute(select(PartyRow).where(PartyRow.name.in_(sorted(names))))
-        ).scalars().all()
+        rows = (await session.execute(select(PartyRow).where(PartyRow.name.in_(names)))).scalars().all()
         return {row.name: row for row in rows}
 
     @staticmethod
@@ -475,20 +476,21 @@ class TweedeKamerConnector(SourceConnector):
     ) -> dict[str, list[PoliticianRow]]:
         full_names = {
             politician.full_name
-            for politician in (
-                TweedeKamerConnector._build_politician(person)
-                for person in people
-            )
+            for politician in (TweedeKamerConnector._build_politician(person) for person in people)
             if politician is not None
         }
         if not full_names:
             return {}
 
         rows = (
-            await session.execute(
-                select(PoliticianRow).where(PoliticianRow.full_name.in_(sorted(full_names))),
+            (
+                await session.execute(
+                    select(PoliticianRow).where(PoliticianRow.full_name.in_(full_names)),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         politicians_by_name: dict[str, list[PoliticianRow]] = {}
         for row in rows:
             politicians_by_name.setdefault(row.full_name, []).append(row)
@@ -506,20 +508,24 @@ class TweedeKamerConnector(SourceConnector):
         tuple[uuid.UUID, uuid.UUID | None, uuid.UUID | None, uuid.UUID | None, str, date | None, date | None],
         MandateRow,
     ]:
-        politician_ids = list(politician_rows_by_id.values())
-        if not politician_ids:
+        politician_rows = list(politician_rows_by_id.values())
+        if not politician_rows:
             return {}
 
         rows = (
-            await session.execute(
-                select(MandateRow).where(
-                    MandateRow.politician_id.in_([row.id for row in politician_ids]),
-                    MandateRow.institution_id == institution_id,
-                    MandateRow.governing_body_id == governing_body_id,
-                    MandateRow.party_id.in_([row.id for row in party_rows_by_id.values()]),
-                ),
+            (
+                await session.execute(
+                    select(MandateRow).where(
+                        MandateRow.politician_id.in_([row.id for row in politician_rows]),
+                        MandateRow.institution_id == institution_id,
+                        MandateRow.governing_body_id == governing_body_id,
+                        MandateRow.party_id.in_([row.id for row in party_rows_by_id.values()]),
+                    ),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {
             TweedeKamerConnector._mandate_key(
                 politician_id=row.politician_id,

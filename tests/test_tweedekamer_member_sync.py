@@ -234,10 +234,14 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert parties[1].active_until == date(2024, 12, 31)
 
     politicians = (
-        await async_session.execute(
-            select(PoliticianRow).order_by(PoliticianRow.full_name),
+        (
+            await async_session.execute(
+                select(PoliticianRow).order_by(PoliticianRow.full_name),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert [politician.full_name for politician in politicians] == [
         "Myrthe Bikker",
         "Pieter van Vliet",
@@ -246,10 +250,14 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert politicians[1].notes == "Voormalig Kamerlid"
 
     mandates = (
-        await async_session.execute(
-            select(MandateRow).order_by(MandateRow.start_date),
+        (
+            await async_session.execute(
+                select(MandateRow).order_by(MandateRow.start_date),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(mandates) == 2
     assert mandates[0].role == "member"
     assert mandates[0].start_date == date(2021, 3, 31)
