@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { fetchPolitician, fetchPoliticianMandates } from "@/lib/api";
+import {
+  fetchParties,
+  fetchPolitician,
+  fetchPoliticianMandates,
+} from "@/lib/api";
 import type { Mandate, Politician } from "@/lib/types";
 import type { Metadata } from "next";
 
@@ -47,10 +51,20 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
 /*  Mandate card                                                      */
 /* ------------------------------------------------------------------ */
 
-function MandateCard({ mandate }: { mandate: Mandate }) {
+function MandateCard({
+  mandate,
+  partyNames,
+}: {
+  mandate: Mandate;
+  partyNames: Record<string, string>;
+}) {
   const dateRange = [mandate.start_date, mandate.end_date ?? "present"]
     .filter(Boolean)
     .join(" — ");
+
+  const partyLabel = mandate.party_id
+    ? partyNames[mandate.party_id] ?? mandate.party_id
+    : null;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -65,14 +79,14 @@ function MandateCard({ mandate }: { mandate: Mandate }) {
         )}
       </div>
       <div className="mt-2 space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
-        {mandate.party_id && (
+        {partyLabel && (
           <p>
             Party:{" "}
             <Link
               href={`/parties/${mandate.party_id}`}
               className="text-blue-600 hover:underline dark:text-blue-400"
             >
-              {mandate.party_id}
+              {partyLabel}
             </Link>
           </p>
         )}
@@ -96,9 +110,10 @@ export default async function PoliticianDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [politician, mandatesRes] = await Promise.all([
+  const [politician, mandatesRes, partiesRes] = await Promise.all([
     fetchPolitician(id),
     fetchPoliticianMandates(id),
+    fetchParties(),
   ]);
 
   if (!politician) {
@@ -107,6 +122,13 @@ export default async function PoliticianDetailPage({
 
   const p: Politician = politician;
   const mandates = mandatesRes?.items ?? [];
+
+  const partyNames: Record<string, string> = {};
+  for (const party of partiesRes?.items ?? []) {
+    partyNames[party.id] = party.abbreviation
+      ? `${party.abbreviation} — ${party.name}`
+      : party.name;
+  }
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 font-sans dark:bg-black">
@@ -152,7 +174,7 @@ export default async function PoliticianDetailPage({
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {mandates.map((m) => (
-                <MandateCard key={m.id} mandate={m} />
+                <MandateCard key={m.id} mandate={m} partyNames={partyNames} />
               ))}
             </div>
           )}
