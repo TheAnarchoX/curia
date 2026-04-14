@@ -4,6 +4,8 @@ import { fetchInstitutions, fetchMeetings } from "@/lib/api";
 import type { Meeting } from "@/lib/types";
 import type { Metadata } from "next";
 
+import { StatusBadge, TypeBadge } from "./_components/badges";
+
 export const metadata: Metadata = {
   title: "Meetings — Curia",
   description:
@@ -32,54 +34,13 @@ function fmtTime(iso: string | null): string {
 }
 
 /** Map meeting status to a coloured badge. */
-function StatusBadge({ status }: { status: string }) {
-  const colours: Record<string, string> = {
-    scheduled:
-      "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-    in_progress:
-      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-    completed:
-      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-    cancelled:
-      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-    postponed:
-      "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300",
-  };
-
-  return (
-    <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${colours[status] ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}
-    >
-      {status.replace("_", " ")}
-    </span>
-  );
-}
+/* StatusBadge imported from _components/badges */
 
 /* ------------------------------------------------------------------ */
 /*  Type badge — national vs municipal                                */
 /* ------------------------------------------------------------------ */
 
-function TypeBadge({ meetingType }: { meetingType: string | null }) {
-  if (!meetingType) return null;
-
-  const isNational =
-    meetingType.toLowerCase().includes("plenary") ||
-    meetingType.toLowerCase().includes("national") ||
-    meetingType.toLowerCase().includes("chamber") ||
-    meetingType.toLowerCase().includes("plenair");
-
-  return (
-    <span
-      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-        isNational
-          ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-          : "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
-      }`}
-    >
-      {isNational ? "National" : "Municipal"}
-    </span>
-  );
-}
+/* StatusBadge and TypeBadge are imported from _components/badges */
 
 /* ------------------------------------------------------------------ */
 /*  Filters                                                           */
@@ -321,11 +282,12 @@ function CalendarView({ meetings }: { meetings: Meeting[] }) {
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             {dateKey === "unscheduled"
               ? "Unscheduled"
-              : new Date(dateKey + "T00:00:00").toLocaleDateString("nl-NL", {
+              : new Date(dateKey + "T12:00:00Z").toLocaleDateString("nl-NL", {
                   weekday: "long",
                   year: "numeric",
                   month: "long",
                   day: "numeric",
+                  timeZone: "UTC",
                 })}
           </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
