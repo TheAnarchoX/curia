@@ -19,6 +19,7 @@ See: https://opendata.tweedekamer.nl/documentatie/odata-api
 
 from curia_connectors_tweedekamer.connector import (
     BillSyncResult,
+    CommitteeSessionSyncResult,
     MemberPartySyncResult,
     TweedeKamerConnector,
     VoteSyncResult,
@@ -54,6 +55,7 @@ __all__ = [
     "Commissie",
     "CommissieLid",
     "CommissieZetel",
+    "CommitteeSessionSyncResult",
     "Document",
     "DocumentActor",
     "Fractie",
