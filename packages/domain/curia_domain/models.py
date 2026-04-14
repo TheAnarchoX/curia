@@ -275,6 +275,17 @@ class Vote(BaseEntity):
     politician_votes: dict[str, str] = Field(default_factory=dict)
 
 
+class VoteRecord(BaseEntity):
+    """An individual voting record for a member or faction on a vote."""
+
+    vote_id: uuid.UUID
+    politician_id: uuid.UUID | None = None
+    party_id: uuid.UUID | None = None
+    value: str
+    party_size: int | None = None
+    is_mistake: bool = False
+
+
 # ---------------------------------------------------------------------------
 # Taxonomy
 # ---------------------------------------------------------------------------

@@ -44,6 +44,7 @@ from curia_domain.models import (
     SourceRecord,
     Topic,
     Vote,
+    VoteRecord,
     WrittenQuestion,
 )
 
@@ -91,5 +92,6 @@ __all__ = [
     "SourceRecord",
     "Topic",
     "Vote",
+    "VoteRecord",
     "WrittenQuestion",
 ]
