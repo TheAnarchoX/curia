@@ -413,8 +413,18 @@ class DecisionRow(TimestampMixin, Base):
     decision_type: Mapped[str] = mapped_column(String(32), nullable=False, default=DecisionType.VOTE)
     outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    __table_args__ = (Index("ix_decisions_meeting_id", "meeting_id"),)
+    __table_args__ = (
+        Index("ix_decisions_meeting_id", "meeting_id"),
+        Index(
+            "ux_decisions_meeting_id_external_id",
+            "meeting_id",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
+    )
 
 
 class VoteRow(TimestampMixin, Base):
@@ -437,6 +447,29 @@ class VoteRow(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_votes_decision_id", "decision_id"),
         Index("ix_votes_date", "date"),
+    )
+
+
+class VoteRecordRow(TimestampMixin, Base):
+    """ORM model for individual voting records."""
+
+    __tablename__ = "vote_records"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    vote_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("votes.id"), nullable=False)
+    politician_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("politicians.id"), nullable=True
+    )
+    party_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("parties.id"), nullable=True)
+    value: Mapped[str] = mapped_column(String(32), nullable=False)
+    party_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_mistake: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    external_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    __table_args__ = (
+        Index("ix_vote_records_vote_id", "vote_id"),
+        Index("ix_vote_records_politician_id", "politician_id"),
+        Index("ix_vote_records_external_id", "external_id", unique=True),
     )
 
 
