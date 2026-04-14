@@ -463,7 +463,7 @@ class VoteRecordRow(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_vote_records_vote_id", "vote_id"),
         Index("ix_vote_records_politician_id", "politician_id"),
-        Index("ix_vote_records_external_id", "external_id"),
+        Index("ix_vote_records_external_id", "external_id", unique=True),
     )
 
 

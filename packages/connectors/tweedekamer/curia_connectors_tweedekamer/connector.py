@@ -746,7 +746,16 @@ class TweedeKamerConnector(SourceConnector):
         votes_against = 0
         votes_abstain = 0
         for stemming in stemmingen:
-            size = stemming.fractie_grootte or 1
+            # FractieGrootte is the number of faction members voting this way.
+            # When it is None and a Persoon_Id is set, the record represents a
+            # single member's individual vote so we default to 1.  Otherwise we
+            # default to 0 to avoid inflating totals.
+            if stemming.fractie_grootte is not None:
+                size = stemming.fractie_grootte
+            elif stemming.persoon_id is not None:
+                size = 1
+            else:
+                size = 0
             mapped = TweedeKamerConnector._map_stemming_soort(stemming.soort)
             if mapped == "for":
                 votes_for += size
