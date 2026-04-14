@@ -600,7 +600,7 @@ async def test_metrics_overview_returns_entity_counts(
     assert response.status_code == 200
     payload = response.json()
 
-    # The seed fixture creates 2 of each entity type.
+    # The seed fixture creates 2 of each entity type, except meetings (4).
     assert payload == {
         "meetings": 4,
         "politicians": 2,
