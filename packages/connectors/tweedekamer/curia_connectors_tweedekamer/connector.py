@@ -22,14 +22,26 @@ from datetime import date, datetime
 from typing import Any
 
 from curia_domain.db.models import (
+    AmendmentRow,
+    BillRow,
     DecisionRow,
+    DocumentRow,
     MandateRow,
+    MotionRow,
     PartyRow,
     PoliticianRow,
     VoteRecordRow,
     VoteRow,
 )
-from curia_domain.enums import DecisionType, JurisdictionLevel, MandateRole, VoteOutcome
+from curia_domain.enums import (
+    BillStatus,
+    DecisionType,
+    DocumentType,
+    JurisdictionLevel,
+    MandateRole,
+    PropositionStatus,
+    VoteOutcome,
+)
 from curia_domain.models import Mandate, Party, Politician
 from curia_ingestion.interfaces import (
     CrawlConfig,
@@ -47,6 +59,7 @@ from curia_connectors_tweedekamer.odata_client import (
     ODataClient,
     Persoon,
     Stemming,
+    ZaakActor,
 )
 
 _VERSION = "0.1.0"
@@ -107,6 +120,43 @@ class VoteSyncResult:
     records_created: int = 0
     records_existing: int = 0
     skipped: int = 0
+
+
+@dataclass
+class BillSyncResult:
+    """Outcome of syncing Tweede Kamer bills, motions, and amendments."""
+
+    fetched_zaken: int = 0
+    fetched_documents: int = 0
+    fetched_dossiers: int = 0
+    bills_created: int = 0
+    bills_existing: int = 0
+    motions_created: int = 0
+    motions_existing: int = 0
+    amendments_created: int = 0
+    amendments_existing: int = 0
+    documents_created: int = 0
+    documents_existing: int = 0
+    skipped: int = 0
+
+
+# Mapping from Dutch Zaak.Soort values to the target entity type.
+_ZAAK_SOORT_MAP: dict[str, str] = {
+    "wetsvoorstel": "bill",
+    "initiatiefwetsvoorstel": "bill",
+    "begroting": "bill",
+    "motie": "motion",
+    "amendement": "amendment",
+}
+
+# Mapping from Dutch Zaak status to BillStatus.
+_ZAAK_STATUS_MAP: dict[str, BillStatus] = {
+    "aangenomen": BillStatus.ADOPTED,
+    "verworpen": BillStatus.REJECTED,
+    "ingetrokken": BillStatus.WITHDRAWN,
+    "in behandeling": BillStatus.COMMITTEE,
+    "aangemeld": BillStatus.INTRODUCED,
+}
 
 
 # Mapping from Dutch Stemming.Soort values to normalised English terms.
@@ -422,6 +472,189 @@ class TweedeKamerConnector(SourceConnector):
                     session.add(record_row)
                     existing_records[odata_id] = record_row
                     result.records_created += 1
+
+            await session.flush()
+            return result
+        finally:
+            if manages_client:
+                await client.aclose()
+
+    async def sync_bills_and_motions(
+        self,
+        session: AsyncSession,
+        *,
+        governing_body_id: uuid.UUID,
+        politician_map: dict[uuid.UUID, PoliticianRow] | None = None,
+        odata_client: ODataClient | None = None,
+    ) -> BillSyncResult:
+        """Fetch Tweede Kamer legislative cases and persist bills, motions, amendments, and documents.
+
+        Parameters
+        ----------
+        session:
+            An active async database session.
+        governing_body_id:
+            The governing body to associate bills with.
+        politician_map:
+            Optional mapping from OData ``Persoon.Id`` to the corresponding
+            :class:`PoliticianRow`.  Used to resolve proposer IDs on motions
+            and amendments.
+        odata_client:
+            Optional shared OData client.  If *None*, a new client is
+            created and closed at the end of the call.
+        """
+        manages_client = odata_client is None
+        client = odata_client or ODataClient()
+        result = BillSyncResult()
+        politician_map = politician_map or {}
+
+        try:
+            zaken, zaak_actors, documents, dossiers = await asyncio.gather(
+                client.list_zaak(),
+                client.list_zaakactor(),
+                client.list_document(),
+                client.list_kamerstukdossier(),
+            )
+
+            result.fetched_zaken = len(zaken)
+            result.fetched_documents = len(documents)
+            result.fetched_dossiers = len(dossiers)
+
+            # Build lookup indexes
+            actors_by_zaak: dict[uuid.UUID, list[ZaakActor]] = {}
+            for actor in zaak_actors:
+                if actor.zaak_id is not None and not actor.verwijderd:
+                    actors_by_zaak.setdefault(actor.zaak_id, []).append(actor)
+
+            # Collect incoming keys per entity type so we can scope DB
+            # lookups to only the records that may need dedup.
+            incoming_bill_ids: set[str] = set()
+            incoming_motion_titles: set[str] = set()
+            incoming_amendment_titles: set[str] = set()
+            for zaak in zaken:
+                if zaak.verwijderd or zaak.id is None:
+                    continue
+                soort = (zaak.soort or "").strip().lower()
+                entity_type = _ZAAK_SOORT_MAP.get(soort)
+                title = zaak.titel or zaak.onderwerp or zaak.citeertitel or f"Zaak {zaak.nummer or str(zaak.id)}"
+                if entity_type == "bill":
+                    incoming_bill_ids.add(str(zaak.id))
+                elif entity_type == "motion":
+                    incoming_motion_titles.add(title[:512])
+                elif entity_type == "amendment":
+                    incoming_amendment_titles.add(title[:512])
+
+            incoming_source_urls: set[str] = {
+                f"{_BASE_URL}/Document({doc.id})" for doc in documents if not doc.verwijderd and doc.id is not None
+            }
+
+            # Load only existing rows that may match the incoming batch
+            existing_bills = await self._load_existing_bills(session, incoming_ids=incoming_bill_ids)
+            existing_motions = await self._load_existing_motions(session, incoming_titles=incoming_motion_titles)
+            existing_amendments = await self._load_existing_amendments(
+                session, incoming_titles=incoming_amendment_titles
+            )
+            existing_documents = await self._load_existing_documents(session, incoming_source_urls=incoming_source_urls)
+
+            # ----- Process Zaak records -----
+            for zaak in zaken:
+                if zaak.verwijderd or zaak.id is None:
+                    result.skipped += 1
+                    continue
+
+                soort = (zaak.soort or "").strip().lower()
+                entity_type = _ZAAK_SOORT_MAP.get(soort)
+
+                if entity_type is None:
+                    # Not a bill/motion/amendment — skip
+                    result.skipped += 1
+                    continue
+
+                external_id = str(zaak.id)
+                title = zaak.titel or zaak.onderwerp or zaak.citeertitel or f"Zaak {zaak.nummer or external_id}"
+                introduced = self._coerce_date(zaak.gestart_op)
+                proposer_ids = self._resolve_proposer_ids(
+                    actors_by_zaak.get(zaak.id, []),
+                    politician_map=politician_map,
+                )
+
+                if entity_type == "bill":
+                    if external_id in existing_bills:
+                        result.bills_existing += 1
+                        continue
+
+                    bill_status = self._map_zaak_status(zaak.status)
+                    bill_row = BillRow(
+                        external_id=external_id,
+                        title=title[:512],
+                        summary=zaak.onderwerp,
+                        bill_type=zaak.soort,
+                        status=bill_status,
+                        introduced_date=introduced,
+                        governing_body_id=governing_body_id,
+                        proposer_ids=proposer_ids or None,
+                    )
+                    session.add(bill_row)
+                    existing_bills[external_id] = bill_row
+                    result.bills_created += 1
+
+                elif entity_type == "motion":
+                    motion_title = title[:512]
+                    if motion_title in existing_motions:
+                        result.motions_existing += 1
+                        continue
+
+                    motion_row = MotionRow(
+                        title=motion_title,
+                        body=zaak.onderwerp,
+                        proposer_ids=proposer_ids or None,
+                        status=self._map_zaak_proposition_status(zaak.status),
+                    )
+                    session.add(motion_row)
+                    existing_motions[motion_title] = motion_row
+                    result.motions_created += 1
+
+                elif entity_type == "amendment":
+                    amendment_title = title[:512]
+                    if amendment_title in existing_amendments:
+                        result.amendments_existing += 1
+                        continue
+
+                    amendment_row = AmendmentRow(
+                        title=amendment_title,
+                        body=zaak.onderwerp,
+                        proposer_ids=proposer_ids or None,
+                        status=self._map_zaak_proposition_status(zaak.status),
+                    )
+                    session.add(amendment_row)
+                    existing_amendments[amendment_title] = amendment_row
+                    result.amendments_created += 1
+
+            # ----- Process Document records -----
+            for doc in documents:
+                if doc.verwijderd or doc.id is None:
+                    result.skipped += 1
+                    continue
+
+                doc_external_id = str(doc.id)
+                source_url = f"{_BASE_URL}/Document({doc_external_id})"
+
+                if source_url in existing_documents:
+                    result.documents_existing += 1
+                    continue
+
+                doc_type = self._map_document_soort(doc.soort)
+                doc_title = doc.titel or doc.onderwerp or doc.citeertitel or f"Document {doc.document_nummer or ''}"
+
+                doc_row = DocumentRow(
+                    title=doc_title[:512] if doc_title else None,
+                    document_type=doc_type,
+                    source_url=source_url,
+                    mime_type=doc.content_type,
+                )
+                session.add(doc_row)
+                existing_documents[source_url] = doc_row
+                result.documents_created += 1
 
             await session.flush()
             return result
@@ -869,3 +1102,127 @@ class TweedeKamerConnector(SourceConnector):
             .all()
         )
         return {row.external_id: row for row in rows if row.external_id is not None}
+
+    # ------------------------------------------------------------------
+    # Bill-sync helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _map_zaak_status(status: str | None) -> str:
+        """Convert a Dutch Zaak.Status value to a :class:`BillStatus` value."""
+        if status is None:
+            return BillStatus.OTHER
+        return _ZAAK_STATUS_MAP.get(status.strip().lower(), BillStatus.OTHER)
+
+    @staticmethod
+    def _map_zaak_proposition_status(status: str | None) -> str:
+        """Convert a Dutch Zaak.Status value to a :class:`PropositionStatus` value."""
+        if status is None:
+            return PropositionStatus.OTHER
+        mapping: dict[str, str] = {
+            "aangenomen": PropositionStatus.ADOPTED,
+            "verworpen": PropositionStatus.REJECTED,
+            "ingetrokken": PropositionStatus.WITHDRAWN,
+            "in behandeling": PropositionStatus.DEBATED,
+            "aangemeld": PropositionStatus.SUBMITTED,
+        }
+        return mapping.get(status.strip().lower(), PropositionStatus.OTHER)
+
+    @staticmethod
+    def _map_document_soort(soort: str | None) -> str:
+        """Convert a Dutch Document.Soort value to a :class:`DocumentType` value."""
+        if soort is None:
+            return DocumentType.OTHER
+        mapping: dict[str, str] = {
+            "wetsvoorstel": DocumentType.BILL,
+            "motie": DocumentType.MOTION,
+            "amendement": DocumentType.AMENDMENT,
+            "verslag": DocumentType.REPORT,
+            "brief": DocumentType.OTHER,
+            "nota": DocumentType.POLICY_DOCUMENT,
+        }
+        return mapping.get(soort.strip().lower(), DocumentType.OTHER)
+
+    @staticmethod
+    def _resolve_proposer_ids(
+        actors: list[ZaakActor],
+        *,
+        politician_map: dict[uuid.UUID, PoliticianRow],
+    ) -> list[uuid.UUID]:
+        """Resolve ZaakActor proposers to Curia politician row IDs."""
+        ids: list[uuid.UUID] = []
+        for actor in actors:
+            if actor.relatie and actor.relatie.lower() in ("indiener", "medeindiener"):
+                if actor.persoon_id is not None:
+                    pol = politician_map.get(actor.persoon_id)
+                    if pol is not None:
+                        ids.append(pol.id)
+        return ids
+
+    @staticmethod
+    async def _load_existing_bills(
+        session: AsyncSession,
+        *,
+        incoming_ids: set[str],
+    ) -> dict[str, BillRow]:
+        """Load existing BillRow objects keyed by external_id.
+
+        Only rows whose ``external_id`` is in *incoming_ids* are fetched
+        to keep DB I/O bounded.
+        """
+        if not incoming_ids:
+            return {}
+        rows = (await session.execute(select(BillRow).where(BillRow.external_id.in_(incoming_ids)))).scalars().all()
+        return {row.external_id: row for row in rows if row.external_id is not None}
+
+    @staticmethod
+    async def _load_existing_motions(
+        session: AsyncSession,
+        *,
+        incoming_titles: set[str],
+    ) -> dict[str, MotionRow]:
+        """Load existing MotionRow objects keyed by title (used for dedup).
+
+        Only rows whose ``title`` is in *incoming_titles* are fetched.
+        """
+        if not incoming_titles:
+            return {}
+        rows = (await session.execute(select(MotionRow).where(MotionRow.title.in_(incoming_titles)))).scalars().all()
+        return {row.title: row for row in rows}
+
+    @staticmethod
+    async def _load_existing_amendments(
+        session: AsyncSession,
+        *,
+        incoming_titles: set[str],
+    ) -> dict[str, AmendmentRow]:
+        """Load existing AmendmentRow objects keyed by title (used for dedup).
+
+        Only rows whose ``title`` is in *incoming_titles* are fetched.
+        """
+        if not incoming_titles:
+            return {}
+        rows = (
+            (await session.execute(select(AmendmentRow).where(AmendmentRow.title.in_(incoming_titles)))).scalars().all()
+        )
+        return {row.title: row for row in rows}
+
+    @staticmethod
+    async def _load_existing_documents(
+        session: AsyncSession,
+        *,
+        incoming_source_urls: set[str],
+    ) -> dict[str, DocumentRow]:
+        """Load existing DocumentRow objects keyed by source_url.
+
+        Only rows whose ``source_url`` is in *incoming_source_urls* are
+        fetched.
+        """
+        if not incoming_source_urls:
+            return {}
+        rows = (
+            (await session.execute(select(DocumentRow).where(DocumentRow.source_url.in_(incoming_source_urls))))
+            .scalars()
+            .all()
+        )
+        return {row.source_url: row for row in rows if row.source_url is not None}

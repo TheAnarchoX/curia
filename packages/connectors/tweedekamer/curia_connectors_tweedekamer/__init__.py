@@ -17,7 +17,12 @@ Data available (CC-0 license, no auth required):
 See: https://opendata.tweedekamer.nl/documentatie/odata-api
 """
 
-from curia_connectors_tweedekamer.connector import MemberPartySyncResult, TweedeKamerConnector, VoteSyncResult
+from curia_connectors_tweedekamer.connector import (
+    BillSyncResult,
+    MemberPartySyncResult,
+    TweedeKamerConnector,
+    VoteSyncResult,
+)
 from curia_connectors_tweedekamer.odata_client import (
     Activiteit,
     Agendapunt,
@@ -45,6 +50,7 @@ __all__ = [
     "Agendapunt",
     "Activiteit",
     "Besluit",
+    "BillSyncResult",
     "Commissie",
     "CommissieLid",
     "CommissieZetel",
