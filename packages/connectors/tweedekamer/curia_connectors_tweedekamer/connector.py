@@ -21,8 +21,15 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from curia_domain.db.models import MandateRow, PartyRow, PoliticianRow
-from curia_domain.enums import JurisdictionLevel, MandateRole
+from curia_domain.db.models import (
+    DecisionRow,
+    MandateRow,
+    PartyRow,
+    PoliticianRow,
+    VoteRecordRow,
+    VoteRow,
+)
+from curia_domain.enums import DecisionType, JurisdictionLevel, MandateRole, VoteOutcome
 from curia_domain.models import Mandate, Party, Politician
 from curia_ingestion.interfaces import (
     CrawlConfig,
@@ -34,10 +41,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from curia_connectors_tweedekamer.odata_client import (
+    Besluit,
     Fractie,
     FractieZetelPersoon,
     ODataClient,
     Persoon,
+    Stemming,
 )
 
 _VERSION = "0.1.0"
@@ -83,6 +92,29 @@ class MemberPartySyncResult:
     def updated(self, value: int) -> None:
         """Deprecated alias for ``existing`` kept for backward compatibility."""
         self.existing = value
+
+
+@dataclass
+class VoteSyncResult:
+    """Outcome of syncing Tweede Kamer voting records."""
+
+    fetched_besluiten: int = 0
+    fetched_stemmingen: int = 0
+    decisions_created: int = 0
+    decisions_existing: int = 0
+    votes_created: int = 0
+    votes_existing: int = 0
+    records_created: int = 0
+    records_existing: int = 0
+    skipped: int = 0
+
+
+# Mapping from Dutch Stemming.Soort values to normalised English terms.
+_STEMMING_SOORT_MAP: dict[str, str] = {
+    "voor": "for",
+    "tegen": "against",
+    "niet deelgenomen": "not_participated",
+}
 
 
 class TweedeKamerConnector(SourceConnector):
@@ -229,6 +261,142 @@ class TweedeKamerConnector(SourceConnector):
                         continue
                     result.created += int(created)
                     result.existing += int(not created)
+
+            await session.flush()
+            return result
+        finally:
+            if manages_client:
+                await client.aclose()
+
+    async def sync_votes(
+        self,
+        session: AsyncSession,
+        *,
+        meeting_id: uuid.UUID,
+        politician_map: dict[uuid.UUID, PoliticianRow],
+        party_map: dict[uuid.UUID, PartyRow],
+        odata_client: ODataClient | None = None,
+    ) -> VoteSyncResult:
+        """Fetch Tweede Kamer voting records and persist them.
+
+        Parameters
+        ----------
+        session:
+            An active async database session.
+        meeting_id:
+            The meeting to attach decisions/votes to.
+        politician_map:
+            Mapping from OData ``Persoon.Id`` to the corresponding
+            :class:`PoliticianRow`.  Typically built during a prior
+            :meth:`sync_members_and_parties` call.
+        party_map:
+            Mapping from OData ``Fractie.Id`` to the corresponding
+            :class:`PartyRow`.
+        odata_client:
+            Optional shared OData client.  If *None*, a new client is
+            created and closed at the end of the call.
+        """
+        manages_client = odata_client is None
+        client = odata_client or ODataClient()
+        result = VoteSyncResult()
+
+        try:
+            besluiten, stemmingen = await asyncio.gather(
+                client.list_besluit(),
+                client.list_stemming(expand=["StemmingsSoort"]),
+            )
+
+            result.fetched_besluiten = len(besluiten)
+            result.fetched_stemmingen = len(stemmingen)
+
+            # Index Besluit records by their OData Id.
+            besluiten_by_id: dict[uuid.UUID, Besluit] = {
+                b.id: b for b in besluiten if b.id is not None and not b.verwijderd
+            }
+
+            # Group Stemming records by Besluit_Id.
+            stemmingen_by_besluit: dict[uuid.UUID, list[Stemming]] = {}
+            for stemming in stemmingen:
+                if stemming.verwijderd or stemming.besluit_id is None:
+                    result.skipped += 1
+                    continue
+                stemmingen_by_besluit.setdefault(stemming.besluit_id, []).append(stemming)
+
+            # Load existing decisions for this meeting to allow idempotent re-runs.
+            existing_decisions = await self._load_existing_decisions(session, meeting_id=meeting_id)
+            existing_votes = await self._load_existing_votes(session, decision_ids=set(existing_decisions.values()))
+
+            for besluit_id, besluit_stemmingen in stemmingen_by_besluit.items():
+                besluit = besluiten_by_id.get(besluit_id)
+
+                # ----- Decision (Besluit) -----
+                decision_row: DecisionRow
+                if besluit_id in existing_decisions:
+                    decision_row_id = existing_decisions[besluit_id]
+                    stmt = select(DecisionRow).where(DecisionRow.id == decision_row_id)
+                    decision_row = (await session.execute(stmt)).scalar_one()
+                    result.decisions_existing += 1
+                else:
+                    description = besluit.besluit_tekst if besluit else None
+                    decision_row = DecisionRow(
+                        meeting_id=meeting_id,
+                        decision_type=DecisionType.VOTE,
+                        description=description,
+                        external_id=str(besluit_id),
+                    )
+                    session.add(decision_row)
+                    await session.flush()
+                    existing_decisions[besluit_id] = decision_row.id
+                    result.decisions_created += 1
+
+                # ----- Vote (aggregate) -----
+                vote_row: VoteRow
+                if decision_row.id in existing_votes:
+                    vote_row = existing_votes[decision_row.id]
+                    result.votes_existing += 1
+                else:
+                    counts = self._aggregate_stemming(besluit_stemmingen)
+                    vote_row = VoteRow(
+                        decision_id=decision_row.id,
+                        proposition_type=besluit.stemmings_soort if besluit else None,
+                        outcome=counts["outcome"],
+                        votes_for=counts["votes_for"],
+                        votes_against=counts["votes_against"],
+                        votes_abstain=counts["votes_abstain"],
+                    )
+                    session.add(vote_row)
+                    await session.flush()
+                    existing_votes[decision_row.id] = vote_row
+                    result.votes_created += 1
+
+                # ----- VoteRecords (per-faction / per-member) -----
+                existing_records = await self._load_existing_vote_records(session, vote_id=vote_row.id)
+
+                for stemming in besluit_stemmingen:
+                    if stemming.id is None:
+                        result.skipped += 1
+                        continue
+                    odata_id = str(stemming.id)
+                    if odata_id in existing_records:
+                        result.records_existing += 1
+                        continue
+
+                    value = self._map_stemming_soort(stemming.soort)
+                    politician_row = politician_map.get(stemming.persoon_id) if stemming.persoon_id else None
+                    party_row = party_map.get(stemming.fractie_id) if stemming.fractie_id else None
+
+                    record_row = VoteRecordRow(
+                        vote_id=vote_row.id,
+                        politician_id=politician_row.id if politician_row else None,
+                        party_id=party_row.id if party_row else None,
+                        value=value,
+                        party_size=stemming.fractie_grootte,
+                        is_mistake=bool(stemming.vergissing),
+                        external_id=odata_id,
+                    )
+                    session.add(record_row)
+                    existing_records[odata_id] = record_row
+                    result.records_created += 1
 
             await session.flush()
             return result
@@ -559,3 +727,99 @@ class TweedeKamerConnector(SourceConnector):
             start_date,
             end_date,
         )
+
+    # ------------------------------------------------------------------
+    # Vote-sync helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _map_stemming_soort(soort: str | None) -> str:
+        """Convert a Dutch Stemming.Soort value to an English label."""
+        if soort is None:
+            return "unknown"
+        return _STEMMING_SOORT_MAP.get(soort.strip().lower(), "unknown")
+
+    @staticmethod
+    def _aggregate_stemming(stemmingen: list[Stemming]) -> dict[str, Any]:
+        """Compute aggregate vote counts from a list of Stemming records."""
+        votes_for = 0
+        votes_against = 0
+        votes_abstain = 0
+        for stemming in stemmingen:
+            size = stemming.fractie_grootte or 1
+            mapped = TweedeKamerConnector._map_stemming_soort(stemming.soort)
+            if mapped == "for":
+                votes_for += size
+            elif mapped == "against":
+                votes_against += size
+            elif mapped == "not_participated":
+                votes_abstain += size
+
+        outcome: str | None = None
+        if votes_for > votes_against:
+            outcome = VoteOutcome.ADOPTED
+        elif votes_against > votes_for:
+            outcome = VoteOutcome.REJECTED
+        elif votes_for == votes_against and (votes_for + votes_against) > 0:
+            outcome = VoteOutcome.TIED
+
+        return {
+            "votes_for": votes_for,
+            "votes_against": votes_against,
+            "votes_abstain": votes_abstain,
+            "outcome": outcome,
+        }
+
+    @staticmethod
+    async def _load_existing_decisions(
+        session: AsyncSession,
+        *,
+        meeting_id: uuid.UUID,
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        """Load existing decisions for a meeting keyed by OData Besluit UUID.
+
+        Returns a mapping ``{besluit_odata_uuid: decision_row_id}``
+        for decisions that have an ``external_id`` set.
+        """
+        rows = (
+            (
+                await session.execute(
+                    select(DecisionRow).where(
+                        DecisionRow.meeting_id == meeting_id,
+                        DecisionRow.external_id.isnot(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        mapping: dict[uuid.UUID, uuid.UUID] = {}
+        for row in rows:
+            if row.external_id is not None:
+                try:
+                    mapping[uuid.UUID(row.external_id)] = row.id
+                except ValueError:
+                    pass
+        return mapping
+
+    @staticmethod
+    async def _load_existing_votes(
+        session: AsyncSession,
+        *,
+        decision_ids: set[uuid.UUID],
+    ) -> dict[uuid.UUID, VoteRow]:
+        """Load existing VoteRow objects keyed by decision_id."""
+        if not decision_ids:
+            return {}
+        rows = (await session.execute(select(VoteRow).where(VoteRow.decision_id.in_(decision_ids)))).scalars().all()
+        return {row.decision_id: row for row in rows}
+
+    @staticmethod
+    async def _load_existing_vote_records(
+        session: AsyncSession,
+        *,
+        vote_id: uuid.UUID,
+    ) -> dict[str, VoteRecordRow]:
+        """Load existing VoteRecordRow objects keyed by external_id."""
+        rows = (await session.execute(select(VoteRecordRow).where(VoteRecordRow.vote_id == vote_id))).scalars().all()
+        return {row.external_id: row for row in rows if row.external_id is not None}
