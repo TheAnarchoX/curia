@@ -22,11 +22,14 @@ from datetime import date, datetime
 from typing import Any
 
 from curia_domain.db.models import (
+    AgendaItemRow,
     AmendmentRow,
     BillRow,
     DecisionRow,
     DocumentRow,
+    GoverningBodyRow,
     MandateRow,
+    MeetingRow,
     MotionRow,
     PartyRow,
     PoliticianRow,
@@ -37,8 +40,10 @@ from curia_domain.enums import (
     BillStatus,
     DecisionType,
     DocumentType,
+    GoverningBodyType,
     JurisdictionLevel,
     MandateRole,
+    MeetingStatus,
     PropositionStatus,
     VoteOutcome,
 )
@@ -53,6 +58,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from curia_connectors_tweedekamer.odata_client import (
+    Agendapunt,
     Besluit,
     Fractie,
     FractieZetelPersoon,
@@ -140,6 +146,24 @@ class BillSyncResult:
     skipped: int = 0
 
 
+@dataclass
+class CommitteeSessionSyncResult:
+    """Outcome of syncing Tweede Kamer committees, sessions, and agenda items."""
+
+    fetched_commissies: int = 0
+    fetched_commissiezetels: int = 0
+    fetched_vergaderingen: int = 0
+    fetched_activiteiten: int = 0
+    fetched_agendapunten: int = 0
+    committees_created: int = 0
+    committees_existing: int = 0
+    meetings_created: int = 0
+    meetings_existing: int = 0
+    agenda_items_created: int = 0
+    agenda_items_existing: int = 0
+    skipped: int = 0
+
+
 # Mapping from Dutch Zaak.Soort values to the target entity type.
 _ZAAK_SOORT_MAP: dict[str, str] = {
     "wetsvoorstel": "bill",
@@ -164,6 +188,25 @@ _STEMMING_SOORT_MAP: dict[str, str] = {
     "voor": "for",
     "tegen": "against",
     "niet deelgenomen": "not_participated",
+}
+
+
+# Mapping from Dutch Commissie.Soort values to GoverningBodyType.
+_COMMISSIE_SOORT_MAP: dict[str, str] = {
+    "algemeen": GoverningBodyType.COMMITTEE,
+    "bijzonder": GoverningBodyType.COMMITTEE,
+    "vast": GoverningBodyType.COMMITTEE,
+    "thema": GoverningBodyType.COMMITTEE,
+    "overig": GoverningBodyType.OTHER,
+}
+
+# Mapping from Dutch Activiteit.Status values to MeetingStatus.
+_ACTIVITEIT_STATUS_MAP: dict[str, str] = {
+    "gepland": MeetingStatus.SCHEDULED,
+    "gereed": MeetingStatus.COMPLETED,
+    "afgelast": MeetingStatus.CANCELLED,
+    "uitgesteld": MeetingStatus.POSTPONED,
+    "verplaatst": MeetingStatus.POSTPONED,
 }
 
 
@@ -655,6 +698,206 @@ class TweedeKamerConnector(SourceConnector):
                 session.add(doc_row)
                 existing_documents[source_url] = doc_row
                 result.documents_created += 1
+
+            await session.flush()
+            return result
+        finally:
+            if manages_client:
+                await client.aclose()
+
+    async def sync_committees_and_sessions(
+        self,
+        session: AsyncSession,
+        *,
+        institution_id: uuid.UUID,
+        governing_body_id: uuid.UUID,
+        odata_client: ODataClient | None = None,
+    ) -> CommitteeSessionSyncResult:
+        """Fetch Tweede Kamer committees, sessions, and agenda items and persist them.
+
+        Parameters
+        ----------
+        session:
+            An active async database session.
+        institution_id:
+            The institution (Tweede Kamer) to associate committees with.
+        governing_body_id:
+            The plenary governing body to use for meetings without a specific
+            committee association.
+        odata_client:
+            Optional shared OData client.  If *None*, a new client is
+            created and closed at the end of the call.
+        """
+        manages_client = odata_client is None
+        client = odata_client or ODataClient()
+        result = CommitteeSessionSyncResult()
+
+        try:
+            commissies, commissiezetels, vergaderingen, activiteiten, agendapunten = await asyncio.gather(
+                client.list_commissie(),
+                client.list_commissiezetel(),
+                client.list_vergadering(),
+                client.list_activiteit(),
+                client.list_agendapunt(),
+            )
+
+            result.fetched_commissies = len(commissies)
+            result.fetched_commissiezetels = len(commissiezetels)
+            result.fetched_vergaderingen = len(vergaderingen)
+            result.fetched_activiteiten = len(activiteiten)
+            result.fetched_agendapunten = len(agendapunten)
+
+            # ----------------------------------------------------------
+            # Committees  (Commissie → GoverningBodyRow)
+            # ----------------------------------------------------------
+            committee_map: dict[uuid.UUID, GoverningBodyRow] = {}
+            existing_committees = await self._load_existing_committees(
+                session,
+                institution_id=institution_id,
+            )
+
+            for commissie in commissies:
+                if commissie.verwijderd or commissie.id is None:
+                    result.skipped += 1
+                    continue
+
+                name = commissie.naam_nl or commissie.afkorting or f"Commissie {commissie.nummer or str(commissie.id)}"
+                body_type = self._map_commissie_soort(commissie.soort)
+
+                existing = existing_committees.get(name)
+                if existing is not None:
+                    committee_map[commissie.id] = existing
+                    result.committees_existing += 1
+                else:
+                    committee_row = GoverningBodyRow(
+                        institution_id=institution_id,
+                        name=name,
+                        body_type=body_type,
+                        valid_from=self._coerce_date(commissie.datum_actief),
+                        valid_until=self._coerce_date(commissie.datum_inactief),
+                    )
+                    session.add(committee_row)
+                    existing_committees[name] = committee_row
+                    committee_map[commissie.id] = committee_row
+                    result.committees_created += 1
+
+            await session.flush()
+
+            # ----------------------------------------------------------
+            # Vergaderingen  (plenary sessions → MeetingRow)
+            # ----------------------------------------------------------
+            incoming_vergadering_urls: set[str] = {
+                f"{_BASE_URL}/Vergadering({v.id})" for v in vergaderingen if not v.verwijderd and v.id is not None
+            }
+            incoming_activiteit_urls: set[str] = {
+                f"{_BASE_URL}/Activiteit({a.id})" for a in activiteiten if not a.verwijderd and a.id is not None
+            }
+            existing_meetings = await self._load_existing_meetings(
+                session,
+                incoming_source_urls=incoming_vergadering_urls | incoming_activiteit_urls,
+            )
+
+            for vergadering in vergaderingen:
+                if vergadering.verwijderd or vergadering.id is None:
+                    result.skipped += 1
+                    continue
+
+                source_url = f"{_BASE_URL}/Vergadering({vergadering.id})"
+                if source_url in existing_meetings:
+                    result.meetings_existing += 1
+                    continue
+
+                title = vergadering.titel or f"Vergadering {vergadering.vergadering_nummer or ''}"
+                status = MeetingStatus.COMPLETED if vergadering.sluiting else MeetingStatus.SCHEDULED
+
+                meeting_row = MeetingRow(
+                    governing_body_id=governing_body_id,
+                    title=title[:512] if title else None,
+                    meeting_type=vergadering.soort,
+                    scheduled_start=vergadering.aanvangstijd or vergadering.datum,
+                    scheduled_end=vergadering.sluiting,
+                    location=vergadering.zaal,
+                    status=status,
+                    source_url=source_url,
+                )
+                session.add(meeting_row)
+                existing_meetings[source_url] = meeting_row
+                result.meetings_created += 1
+
+            # ----------------------------------------------------------
+            # Activiteiten  (committee sessions → MeetingRow)
+            # ----------------------------------------------------------
+            activiteit_meeting_map: dict[uuid.UUID, MeetingRow] = {}
+            new_activiteit_ids: set[uuid.UUID] = set()
+
+            for activiteit in activiteiten:
+                if activiteit.verwijderd or activiteit.id is None:
+                    result.skipped += 1
+                    continue
+
+                source_url = f"{_BASE_URL}/Activiteit({activiteit.id})"
+                if source_url in existing_meetings:
+                    activiteit_meeting_map[activiteit.id] = existing_meetings[source_url]
+                    result.meetings_existing += 1
+                    continue
+
+                # Resolve the committee governing body, fall back to plenary.
+                act_governing_body_id = governing_body_id
+                if activiteit.voortouwcommissie_id and activiteit.voortouwcommissie_id in committee_map:
+                    act_governing_body_id = committee_map[activiteit.voortouwcommissie_id].id
+
+                title = activiteit.onderwerp or f"Activiteit {activiteit.nummer or ''}"
+                act_status = self._map_activiteit_status(activiteit.status)
+
+                meeting_row = MeetingRow(
+                    governing_body_id=act_governing_body_id,
+                    title=title[:512] if title else None,
+                    meeting_type=activiteit.soort,
+                    scheduled_start=activiteit.aanvangstijd or activiteit.datum,
+                    scheduled_end=activiteit.eindtijd,
+                    location=activiteit.locatie,
+                    status=act_status,
+                    source_url=source_url,
+                )
+                session.add(meeting_row)
+                existing_meetings[source_url] = meeting_row
+                activiteit_meeting_map[activiteit.id] = meeting_row
+                new_activiteit_ids.add(activiteit.id)
+                result.meetings_created += 1
+
+            await session.flush()
+
+            # ----------------------------------------------------------
+            # Agendapunten  (agenda items → AgendaItemRow)
+            # ----------------------------------------------------------
+            agendapunten_by_activiteit: dict[uuid.UUID, list[Agendapunt]] = {}
+            for ap in agendapunten:
+                if ap.verwijderd or ap.activiteit_id is None:
+                    result.skipped += 1
+                    continue
+                agendapunten_by_activiteit.setdefault(ap.activiteit_id, []).append(ap)
+
+            for activiteit_id, ap_list in agendapunten_by_activiteit.items():
+                act_meeting = activiteit_meeting_map.get(activiteit_id)
+                if act_meeting is None:
+                    result.skipped += len(ap_list)
+                    continue
+
+                if activiteit_id not in new_activiteit_ids:
+                    # Meeting already existed; assume its agenda items do too.
+                    result.agenda_items_existing += len(ap_list)
+                    continue
+
+                for ap in ap_list:
+                    title = ap.onderwerp or f"Agendapunt {ap.nummer or ''}"
+                    agenda_item_row = AgendaItemRow(
+                        meeting_id=act_meeting.id,
+                        ordering=ap.volgorde or 0,
+                        title=title[:512],
+                        description=ap.noot,
+                    )
+                    session.add(agenda_item_row)
+                    result.agenda_items_created += 1
 
             await session.flush()
             return result
@@ -1222,6 +1465,62 @@ class TweedeKamerConnector(SourceConnector):
             return {}
         rows = (
             (await session.execute(select(DocumentRow).where(DocumentRow.source_url.in_(incoming_source_urls))))
+            .scalars()
+            .all()
+        )
+        return {row.source_url: row for row in rows if row.source_url is not None}
+
+    # ------------------------------------------------------------------
+    # Committee-session-sync helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _map_commissie_soort(soort: str | None) -> str:
+        """Convert a Dutch Commissie.Soort value to a :class:`GoverningBodyType` value."""
+        if soort is None:
+            return GoverningBodyType.COMMITTEE
+        return _COMMISSIE_SOORT_MAP.get(soort.strip().lower(), GoverningBodyType.COMMITTEE)
+
+    @staticmethod
+    def _map_activiteit_status(status: str | None) -> str:
+        """Convert a Dutch Activiteit.Status value to a :class:`MeetingStatus` value."""
+        if status is None:
+            return MeetingStatus.SCHEDULED
+        return _ACTIVITEIT_STATUS_MAP.get(status.strip().lower(), MeetingStatus.SCHEDULED)
+
+    @staticmethod
+    async def _load_existing_committees(
+        session: AsyncSession,
+        *,
+        institution_id: uuid.UUID,
+    ) -> dict[str, GoverningBodyRow]:
+        """Load existing GoverningBodyRow objects for an institution, keyed by name."""
+        rows = (
+            (
+                await session.execute(
+                    select(GoverningBodyRow).where(GoverningBodyRow.institution_id == institution_id),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return {row.name: row for row in rows}
+
+    @staticmethod
+    async def _load_existing_meetings(
+        session: AsyncSession,
+        *,
+        incoming_source_urls: set[str],
+    ) -> dict[str, MeetingRow]:
+        """Load existing MeetingRow objects keyed by source_url.
+
+        Only rows whose ``source_url`` is in *incoming_source_urls* are
+        fetched.
+        """
+        if not incoming_source_urls:
+            return {}
+        rows = (
+            (await session.execute(select(MeetingRow).where(MeetingRow.source_url.in_(incoming_source_urls))))
             .scalars()
             .all()
         )
