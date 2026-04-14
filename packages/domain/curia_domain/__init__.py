@@ -1,6 +1,7 @@
 """Curia domain package — canonical models and enumerations."""
 
 from curia_domain.enums import (
+    BillStatus,
     DecisionType,
     DocumentType,
     ExtractionStatus,
@@ -22,6 +23,8 @@ from curia_domain.models import (
     Amendment,
     Assertion,
     BaseEntity,
+    Bill,
+    BillStage,
     DebateSegment,
     Decision,
     Document,
@@ -50,6 +53,7 @@ from curia_domain.models import (
 
 __all__ = [
     # Enums
+    "BillStatus",
     "DecisionType",
     "DocumentType",
     "ExtractionStatus",
@@ -70,6 +74,8 @@ __all__ = [
     "Amendment",
     "Assertion",
     "BaseEntity",
+    "Bill",
+    "BillStage",
     "DebateSegment",
     "Decision",
     "Document",

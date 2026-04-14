@@ -55,6 +55,20 @@ class DocumentType(StrEnum):
     MINUTES = "minutes"
     POLICY_DOCUMENT = "policy_document"
     ATTACHMENT = "attachment"
+    BILL = "bill"
+    OTHER = "other"
+
+
+class BillStatus(StrEnum):
+    """Lifecycle status of a legislative bill."""
+
+    INTRODUCED = "introduced"
+    COMMITTEE = "committee"
+    PLENARY = "plenary"
+    ADOPTED = "adopted"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
+    ENACTED = "enacted"
     OTHER = "other"
 
 

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from curia_domain.db.base import Base, TimestampMixin, uuid_pk
 from curia_domain.enums import (
+    BillStatus,
     DecisionType,
     DocumentType,
     ExtractionStatus,
@@ -392,6 +393,59 @@ class PromiseRow(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_promises_maker_id", "maker_id"),
         Index("ix_promises_status", "status"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bills (legislative proposals)
+# ---------------------------------------------------------------------------
+
+
+class BillRow(TimestampMixin, Base):
+    """ORM model for legislative bills (wetsvoorstellen)."""
+
+    __tablename__ = "bills"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    external_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bill_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default=BillStatus.INTRODUCED)
+    introduced_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    dossier_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    governing_body_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("governing_bodies.id"), nullable=True
+    )
+    proposer_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=True)
+
+    __table_args__ = (
+        Index("ix_bills_status", "status"),
+        Index("ix_bills_dossier_number", "dossier_number"),
+        Index(
+            "ux_bills_external_id",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
+    )
+
+
+class BillStageRow(TimestampMixin, Base):
+    """ORM model for bill lifecycle stages."""
+
+    __tablename__ = "bill_stages"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    bill_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("bills.id"), nullable=False)
+    stage_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    stage_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vote_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("votes.id"), nullable=True)
+
+    __table_args__ = (
+        Index("ix_bill_stages_bill_id", "bill_id"),
+        Index("ix_bill_stages_stage_name", "stage_name"),
     )
 
 
