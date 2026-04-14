@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from curia_domain.db.models import PoliticianRow
+from curia_domain.db.models import MandateRow, PoliticianRow
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.app.dependencies import get_db
 from apps.api.app.routers.v1._utils import fetch_one_or_404, fetch_paginated
 from apps.api.app.schemas.common import PaginatedResponse
-from apps.api.app.schemas.responses import PoliticianResponse
+from apps.api.app.schemas.responses import MandateResponse, PoliticianResponse
 
 router = APIRouter(prefix="/politicians", tags=["politicians"])
 
@@ -19,6 +19,7 @@ router = APIRouter(prefix="/politicians", tags=["politicians"])
 async def list_politicians(
     full_name: str | None = Query(None, description="Filter by full name"),
     family_name: str | None = Query(None, description="Filter by family name"),
+    party_id: UUID | None = Query(None, description="Filter by party (via mandates)"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -30,6 +31,12 @@ async def list_politicians(
         stmt = stmt.where(PoliticianRow.full_name.ilike(f"%{full_name}%"))
     if family_name is not None:
         stmt = stmt.where(PoliticianRow.family_name.ilike(f"%{family_name}%"))
+    if party_id is not None:
+        stmt = (
+            stmt.join(MandateRow, MandateRow.politician_id == PoliticianRow.id)
+            .where(MandateRow.party_id == party_id)
+            .distinct()
+        )
 
     return await fetch_paginated(db, stmt, PoliticianResponse, limit=limit, offset=offset)
 
@@ -46,3 +53,22 @@ async def get_politician(
         PoliticianResponse,
         detail="Politician not found",
     )
+
+
+@router.get(
+    "/{politician_id}/mandates",
+    response_model=PaginatedResponse[MandateResponse],
+)
+async def list_politician_mandates(
+    politician_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> PaginatedResponse[MandateResponse]:
+    """List mandates (party memberships, committee seats) for a politician."""
+    stmt = (
+        select(MandateRow)
+        .where(MandateRow.politician_id == politician_id)
+        .order_by(MandateRow.start_date.desc().nulls_last(), MandateRow.id)
+    )
+    return await fetch_paginated(db, stmt, MandateResponse, limit=limit, offset=offset)
