@@ -59,6 +59,17 @@ class DocumentType(StrEnum):
     OTHER = "other"
 
 
+class BillType(StrEnum):
+    """Classification of a legislative bill."""
+
+    GOVERNMENT = "government"
+    PRIVATE_MEMBER = "private_member"
+    BUDGET = "budget"
+    TREATY_APPROVAL = "treaty_approval"
+    CONSTITUTIONAL = "constitutional"
+    OTHER = "other"
+
+
 class BillStatus(StrEnum):
     """Lifecycle status of a legislative bill."""
 
@@ -69,6 +80,19 @@ class BillStatus(StrEnum):
     REJECTED = "rejected"
     WITHDRAWN = "withdrawn"
     ENACTED = "enacted"
+    OTHER = "other"
+
+
+class ElectionType(StrEnum):
+    """Type of election event."""
+
+    PARLIAMENTARY = "parliamentary"
+    SENATE = "senate"
+    PROVINCIAL = "provincial"
+    MUNICIPAL = "municipal"
+    WATER_AUTHORITY = "water_authority"
+    EUROPEAN = "european"
+    REFERENDUM = "referendum"
     OTHER = "other"
 
 
