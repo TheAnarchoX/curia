@@ -58,9 +58,9 @@ function MandateCard({
   mandate: Mandate;
   partyNames: Record<string, string>;
 }) {
-  const dateRange = [mandate.start_date, mandate.end_date ?? "present"]
-    .filter(Boolean)
-    .join(" — ");
+  const dateRange = mandate.start_date
+    ? `${mandate.start_date} — ${mandate.end_date ?? "present"}`
+    : mandate.end_date ?? "";
 
   const partyLabel = mandate.party_id
     ? partyNames[mandate.party_id] ?? mandate.party_id
@@ -82,12 +82,9 @@ function MandateCard({
         {partyLabel && (
           <p>
             Party:{" "}
-            <Link
-              href={`/parties/${mandate.party_id}`}
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
+            <span className="text-zinc-900 dark:text-zinc-100">
               {partyLabel}
-            </Link>
+            </span>
           </p>
         )}
         {mandate.governing_body_id && (

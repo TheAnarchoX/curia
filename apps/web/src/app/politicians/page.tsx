@@ -28,11 +28,13 @@ function Filters({
         type="text"
         name="search"
         defaultValue={currentSearch}
+        aria-label="Search by name"
         placeholder="Search by name…"
         className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 sm:w-64"
       />
       <select
         name="partyId"
+        aria-label="Filter by party"
         defaultValue={currentPartyId}
         className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 focus:border-blue-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 sm:w-56"
       >
