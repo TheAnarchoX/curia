@@ -1,6 +1,5 @@
 """Metric endpoints."""
 
-import asyncio
 from datetime import date
 from uuid import UUID
 
@@ -42,34 +41,15 @@ async def get_overview(
     db: AsyncSession = Depends(get_db),
 ) -> OverviewResponse:
     """Return high-level entity counts for the dashboard."""
-    (
-        meetings,
-        politicians,
-        parties,
-        motions,
-        votes,
-        documents,
-        amendments,
-        written_questions,
-    ) = await asyncio.gather(
-        _count(db, MeetingRow),
-        _count(db, PoliticianRow),
-        _count(db, PartyRow),
-        _count(db, MotionRow),
-        _count(db, VoteRow),
-        _count(db, DocumentRow),
-        _count(db, AmendmentRow),
-        _count(db, WrittenQuestionRow),
-    )
     return OverviewResponse(
-        meetings=meetings,
-        politicians=politicians,
-        parties=parties,
-        motions=motions,
-        votes=votes,
-        documents=documents,
-        amendments=amendments,
-        written_questions=written_questions,
+        meetings=await _count(db, MeetingRow),
+        politicians=await _count(db, PoliticianRow),
+        parties=await _count(db, PartyRow),
+        motions=await _count(db, MotionRow),
+        votes=await _count(db, VoteRow),
+        documents=await _count(db, DocumentRow),
+        amendments=await _count(db, AmendmentRow),
+        written_questions=await _count(db, WrittenQuestionRow),
     )
 
 
