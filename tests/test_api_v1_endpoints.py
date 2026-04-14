@@ -640,7 +640,8 @@ async def test_search_returns_cross_entity_results(api_client: AsyncClient) -> N
     assert payload["total"] >= 10
     assert payload["page"] == 1
     assert payload["page_size"] == 20
-    assert payload["pages"] == 1
+    expected_pages = (payload["total"] + payload["page_size"] - 1) // payload["page_size"]
+    assert payload["pages"] == expected_pages
     assert {
         "institution",
         "party",
@@ -654,6 +655,31 @@ async def test_search_returns_cross_entity_results(api_client: AsyncClient) -> N
         "promise",
     } <= {item["entity_type"] for item in payload["items"]}
     assert payload["items"][0]["score"] >= payload["items"][-1]["score"]
+
+
+@pytest.mark.asyncio
+async def test_search_meeting_date_filters_use_utc_datetime_boundaries(
+    api_client: AsyncClient,
+    seeded_ids: SeededIds,
+) -> None:
+    """Search date filters should use explicit UTC datetime boundaries for meetings."""
+    response = await api_client.get(
+        "/api/v1/search",
+        params={
+            "q": "alpha",
+            "entity_type": "meeting",
+            "date_from": "2024-01-31",
+            "date_to": "2024-01-31",
+            "limit": "10",
+            "offset": "0",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert [item["entity_id"] for item in payload["items"]] == [str(seeded_ids.meeting_3)]
+    assert str(seeded_ids.meeting_4) not in {item["entity_id"] for item in payload["items"]}
 
 
 @pytest.mark.asyncio

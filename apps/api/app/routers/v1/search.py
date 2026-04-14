@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -23,7 +23,7 @@ from curia_domain.db.models import (
 )
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, field_validator
-from sqlalchemy import Date, Float, String, case, cast, func, literal, literal_column, select, union_all
+from sqlalchemy import Float, String, case, cast, func, literal, literal_column, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import FromClause
 
@@ -74,13 +74,16 @@ class SearchResultItem(BaseModel):
 
 
 def _search_text(*expressions: Any) -> Any:
-    """Build a normalized text expression for search."""
-    value: Any = literal("")
+    """Build a text expression that matches the indexed search concatenation."""
+    if not expressions:
+        return literal("")
 
-    for expression in expressions:
-        value = value + literal(" ") + func.coalesce(cast(expression, String), "")
+    value: Any = func.coalesce(expressions[0], "")
 
-    return func.trim(value)
+    for expression in expressions[1:]:
+        value = value + literal(" ") + func.coalesce(expression, "")
+
+    return value
 
 
 def _search_snippet(expression: Any | None) -> Any:
@@ -109,6 +112,7 @@ def _build_search_select(
     institution_predicate: Any | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    use_utc_datetime_bounds: bool = False,
 ) -> Any | None:
     """Build a filtered search select for a single entity type."""
     if (date_from is not None or date_to is not None) and entity_date_expression is None:
@@ -130,10 +134,22 @@ def _build_search_select(
     if institution_predicate is not None:
         stmt = stmt.where(institution_predicate)
 
-    if entity_date_expression is not None and date_from is not None:
-        stmt = stmt.where(entity_date_expression >= date_from)
-    if entity_date_expression is not None and date_to is not None:
-        stmt = stmt.where(entity_date_expression <= date_to)
+    if entity_date_expression is not None and use_utc_datetime_bounds:
+        if date_from is not None:
+            start_datetime_from = datetime.combine(date_from, time.min, tzinfo=UTC)
+            stmt = stmt.where(entity_date_expression >= start_datetime_from)
+        if date_to is not None:
+            start_datetime_to = datetime.combine(
+                date_to + timedelta(days=1),
+                time.min,
+                tzinfo=UTC,
+            )
+            stmt = stmt.where(entity_date_expression < start_datetime_to)
+    else:
+        if entity_date_expression is not None and date_from is not None:
+            stmt = stmt.where(entity_date_expression >= date_from)
+        if entity_date_expression is not None and date_to is not None:
+            stmt = stmt.where(entity_date_expression <= date_to)
 
     if dialect_name == "postgresql":
         search_query = func.websearch_to_tsquery(_DUTCH_CONFIG, query_text)
@@ -282,11 +298,12 @@ async def search(
                 MeetingRow.location,
             ),
             snippet_expression=MeetingRow.location,
-            entity_date_expression=cast(MeetingRow.scheduled_start, Date),
+            entity_date_expression=MeetingRow.scheduled_start,
             institution_id=institution_id,
             institution_predicate=scoped_institution,
             date_from=date_from,
             date_to=date_to,
+            use_utc_datetime_bounds=True,
         )
         if SearchEntityType.meeting in selected_types
         else None,
@@ -299,11 +316,12 @@ async def search(
             title_expression=AgendaItemRow.title,
             search_expression=_search_text(AgendaItemRow.title, AgendaItemRow.description),
             snippet_expression=AgendaItemRow.description,
-            entity_date_expression=cast(MeetingRow.scheduled_start, Date),
+            entity_date_expression=MeetingRow.scheduled_start,
             institution_id=institution_id,
             institution_predicate=scoped_institution,
             date_from=date_from,
             date_to=date_to,
+            use_utc_datetime_bounds=True,
         )
         if SearchEntityType.agenda_item in selected_types
         else None,
@@ -316,11 +334,12 @@ async def search(
             title_expression=DocumentRow.title,
             search_expression=_search_text(DocumentRow.title, DocumentRow.text_content),
             snippet_expression=DocumentRow.text_content,
-            entity_date_expression=cast(MeetingRow.scheduled_start, Date),
+            entity_date_expression=MeetingRow.scheduled_start,
             institution_id=institution_id,
             institution_predicate=scoped_institution,
             date_from=date_from,
             date_to=date_to,
+            use_utc_datetime_bounds=True,
         )
         if SearchEntityType.document in selected_types
         else None,
