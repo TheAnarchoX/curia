@@ -19,6 +19,7 @@ from curia_domain.db.models import (
     GoverningBodyRow,
     InstitutionRow,
     JurisdictionRow,
+    MandateRow,
     MeetingRow,
     MetricDefinitionRow,
     MetricResultRow,
@@ -60,6 +61,7 @@ class SeededIds:
     vote_1: uuid.UUID
     party_1: uuid.UUID
     politician_1: uuid.UUID
+    mandate_1: uuid.UUID
     source_1: uuid.UUID
     metric_definition_1: uuid.UUID
     metric_result_1: uuid.UUID
@@ -171,6 +173,26 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
                 politician_2,
             ]
         )
+        await session.flush()
+
+        mandate_1 = MandateRow(
+            politician_id=politician_1.id,
+            party_id=party_1.id,
+            institution_id=institution_1.id,
+            governing_body_id=governing_body_1.id,
+            role="member",
+            start_date=date(2020, 3, 1),
+        )
+        mandate_2 = MandateRow(
+            politician_id=politician_2.id,
+            party_id=party_2.id,
+            institution_id=institution_2.id,
+            governing_body_id=governing_body_2.id,
+            role="member",
+            start_date=date(2022, 6, 1),
+            end_date=date(2024, 6, 1),
+        )
+        session.add_all([mandate_1, mandate_2])
         await session.flush()
 
         meeting_1 = MeetingRow(
@@ -396,6 +418,7 @@ async def seeded_ids(session_factory: async_sessionmaker[AsyncSession]) -> Seede
             vote_1=vote_1.id,
             party_1=party_1.id,
             politician_1=politician_1.id,
+            mandate_1=mandate_1.id,
             source_1=source_1.id,
             metric_definition_1=metric_definition_1.id,
             metric_result_1=metric_result_1.id,
@@ -802,3 +825,52 @@ async def test_v1_detail_endpoints_return_rows_or_404(
     missing_response = await api_client.get(path_template.format(id=uuid.uuid4()))
     assert missing_response.status_code == 404
     assert missing_response.json() == {"detail": detail}
+
+
+# ---------------------------------------------------------------------------
+# Politician-specific endpoints
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_politicians_party_id_filter(
+    api_client: AsyncClient,
+    seeded_ids: SeededIds,
+) -> None:
+    """Filtering by party_id should return only politicians with a matching mandate."""
+    resp = await api_client.get(
+        "/api/v1/politicians",
+        params={"party_id": str(seeded_ids.party_1)},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == str(seeded_ids.politician_1)
+
+
+@pytest.mark.asyncio
+async def test_list_politician_mandates(
+    api_client: AsyncClient,
+    seeded_ids: SeededIds,
+) -> None:
+    """The mandates sub-endpoint should return mandates for the given politician."""
+    resp = await api_client.get(
+        f"/api/v1/politicians/{seeded_ids.politician_1}/mandates",
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == str(seeded_ids.mandate_1)
+    assert body["items"][0]["party_id"] == str(seeded_ids.party_1)
+
+
+@pytest.mark.asyncio
+async def test_list_politician_mandates_empty(
+    api_client: AsyncClient,
+) -> None:
+    """Mandates sub-endpoint for a non-existent politician returns empty list."""
+    resp = await api_client.get(
+        f"/api/v1/politicians/{uuid.uuid4()}/mandates",
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
