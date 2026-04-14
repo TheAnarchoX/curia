@@ -139,6 +139,8 @@ def _build_search_select(
             start_datetime_from = datetime.combine(date_from, time.min, tzinfo=UTC)
             stmt = stmt.where(entity_date_expression >= start_datetime_from)
         if date_to is not None:
+            # Match the meetings endpoint by treating date_to as an exclusive
+            # UTC upper bound at the start of the following day.
             start_datetime_to = datetime.combine(
                 date_to + timedelta(days=1),
                 time.min,
