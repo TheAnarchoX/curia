@@ -192,7 +192,7 @@ export async function fetchMeeting(id: string): Promise<Meeting | null> {
 export async function fetchAgendaItems(
   meetingId: string,
 ): Promise<PaginatedResponse<AgendaItem> | null> {
-  if (!meetingId.trim()) return null;
+  if (!meetingId || meetingId.trim().length === 0) return null;
 
   try {
     const qs = new URLSearchParams({
@@ -216,7 +216,7 @@ export async function fetchAgendaItems(
 export async function fetchDocuments(
   meetingId: string,
 ): Promise<PaginatedResponse<Document> | null> {
-  if (!meetingId.trim()) return null;
+  if (!meetingId || meetingId.trim().length === 0) return null;
 
   try {
     const qs = new URLSearchParams({

@@ -137,7 +137,7 @@ function VoteCard({ vote }: { vote: Vote }) {
     adopted: "text-green-700 dark:text-green-400",
     rejected: "text-red-700 dark:text-red-400",
     tied: "text-yellow-700 dark:text-yellow-400",
-    not_voted: "text-zinc-700 dark:text-zinc-300",
+    not_voted: "text-zinc-500 dark:text-zinc-400",
   };
   const outcomeLabel: Record<string, string> = {
     adopted: "Adopted",
