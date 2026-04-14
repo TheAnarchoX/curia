@@ -30,13 +30,26 @@ class Persoon(ODataEntity):
     """Typed OData model for the Persoon entity set."""
 
     nummer: int | None = Field(default=None, alias="Nummer")
+    titels: str | None = Field(default=None, alias="Titels")
     initialen: str | None = Field(default=None, alias="Initialen")
+    tussenvoegsel: str | None = Field(default=None, alias="Tussenvoegsel")
     achternaam: str | None = Field(default=None, alias="Achternaam")
     voornamen: str | None = Field(default=None, alias="Voornamen")
     roepnaam: str | None = Field(default=None, alias="Roepnaam")
+    geslacht: str | None = Field(default=None, alias="Geslacht")
     functie: str | None = Field(default=None, alias="Functie")
     geboortedatum: date | None = Field(default=None, alias="Geboortedatum")
     fractielabel: str | None = Field(default=None, alias="Fractielabel")
+
+
+class FractieZetelPersoon(ODataEntity):
+    """Typed OData model for the FractieZetelPersoon entity set."""
+
+    fractiezetel_id: UUID | None = Field(default=None, alias="FractieZetel_Id")
+    persoon_id: UUID | None = Field(default=None, alias="Persoon_Id")
+    functie: str | None = Field(default=None, alias="Functie")
+    van: datetime | None = Field(default=None, alias="Van")
+    tot_en_met: datetime | None = Field(default=None, alias="TotEnMet")
 
 
 class Fractie(ODataEntity):
@@ -59,6 +72,10 @@ class FractieZetel(ODataEntity):
 
     gewicht: int | None = Field(default=None, alias="Gewicht")
     fractie_id: UUID | None = Field(default=None, alias="Fractie_Id")
+    fractiezetel_persoon: list[FractieZetelPersoon] = Field(
+        default_factory=list,
+        alias="FractieZetelPersoon",
+    )
 
 
 class Commissie(ODataEntity):
@@ -265,6 +282,7 @@ ENTITY_SET_MODELS: dict[str, type[ODataEntity]] = {
     "Persoon": Persoon,
     "Fractie": Fractie,
     "FractieZetel": FractieZetel,
+    "FractieZetelPersoon": FractieZetelPersoon,
     "Commissie": Commissie,
     "CommissieZetel": CommissieZetel,
     "Vergadering": Vergadering,
@@ -381,6 +399,10 @@ class ODataClient:
     async def list_fractiezetel(self, **kwargs: Unpack[QueryOptions]) -> list[FractieZetel]:
         """Fetch FractieZetel entities."""
         return await self.fetch_entities("FractieZetel", model=FractieZetel, **kwargs)
+
+    async def list_fractiezetelpersoon(self, **kwargs: Unpack[QueryOptions]) -> list[FractieZetelPersoon]:
+        """Fetch FractieZetelPersoon entities."""
+        return await self.fetch_entities("FractieZetelPersoon", model=FractieZetelPersoon, **kwargs)
 
     async def list_commissie(self, **kwargs: Unpack[QueryOptions]) -> list[Commissie]:
         """Fetch Commissie entities."""
@@ -509,6 +531,7 @@ __all__ = [
     "ENTITY_SET_MODELS",
     "Fractie",
     "FractieZetel",
+    "FractieZetelPersoon",
     "Kamerstukdossier",
     "ODataClient",
     "ODataEntity",

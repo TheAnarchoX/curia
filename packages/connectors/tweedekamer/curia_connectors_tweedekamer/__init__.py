@@ -17,7 +17,7 @@ Data available (CC-0 license, no auth required):
 See: https://opendata.tweedekamer.nl/documentatie/odata-api
 """
 
-from curia_connectors_tweedekamer.connector import TweedeKamerConnector
+from curia_connectors_tweedekamer.connector import MemberPartySyncResult, TweedeKamerConnector
 from curia_connectors_tweedekamer.odata_client import (
     Activiteit,
     Agendapunt,
@@ -29,6 +29,7 @@ from curia_connectors_tweedekamer.odata_client import (
     DocumentActor,
     Fractie,
     FractieZetel,
+    FractieZetelPersoon,
     Kamerstukdossier,
     ODataClient,
     ODataEntity,
@@ -51,7 +52,9 @@ __all__ = [
     "DocumentActor",
     "Fractie",
     "FractieZetel",
+    "FractieZetelPersoon",
     "Kamerstukdossier",
+    "MemberPartySyncResult",
     "ODataClient",
     "ODataEntity",
     "Persoon",
