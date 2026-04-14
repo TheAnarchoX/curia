@@ -248,6 +248,19 @@ class DecisionResponse(_BaseResponse):
 # ---------------------------------------------------------------------------
 
 
+class OverviewResponse(BaseModel):
+    """High-level entity counts for the dashboard."""
+
+    meetings: int
+    politicians: int
+    parties: int
+    motions: int
+    votes: int
+    documents: int
+    amendments: int
+    written_questions: int
+
+
 class MetricDefinitionResponse(_BaseResponse):
     """Definition of a computed metric."""
 

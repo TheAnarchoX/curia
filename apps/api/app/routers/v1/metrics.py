@@ -1,19 +1,76 @@
 """Metric endpoints."""
 
+import asyncio
 from datetime import date
 from uuid import UUID
 
-from curia_domain.db.models import MetricDefinitionRow, MetricResultRow
+from curia_domain.db.models import (
+    AmendmentRow,
+    DocumentRow,
+    MeetingRow,
+    MetricDefinitionRow,
+    MetricResultRow,
+    MotionRow,
+    PartyRow,
+    PoliticianRow,
+    VoteRow,
+    WrittenQuestionRow,
+)
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.dependencies import get_db
 from apps.api.app.routers.v1._utils import fetch_paginated
 from apps.api.app.schemas.common import PaginatedResponse
-from apps.api.app.schemas.responses import MetricDefinitionResponse, MetricResultResponse
+from apps.api.app.schemas.responses import (
+    MetricDefinitionResponse,
+    MetricResultResponse,
+    OverviewResponse,
+)
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+
+async def _count(db: AsyncSession, model: type) -> int:
+    result = await db.execute(select(func.count()).select_from(model))
+    return result.scalar_one()
+
+
+@router.get("/overview", response_model=OverviewResponse)
+async def get_overview(
+    db: AsyncSession = Depends(get_db),
+) -> OverviewResponse:
+    """Return high-level entity counts for the dashboard."""
+    (
+        meetings,
+        politicians,
+        parties,
+        motions,
+        votes,
+        documents,
+        amendments,
+        written_questions,
+    ) = await asyncio.gather(
+        _count(db, MeetingRow),
+        _count(db, PoliticianRow),
+        _count(db, PartyRow),
+        _count(db, MotionRow),
+        _count(db, VoteRow),
+        _count(db, DocumentRow),
+        _count(db, AmendmentRow),
+        _count(db, WrittenQuestionRow),
+    )
+    return OverviewResponse(
+        meetings=meetings,
+        politicians=politicians,
+        parties=parties,
+        motions=motions,
+        votes=votes,
+        documents=documents,
+        amendments=amendments,
+        written_questions=written_questions,
+    )
 
 
 @router.get("/definitions", response_model=PaginatedResponse[MetricDefinitionResponse])
