@@ -590,6 +590,30 @@ async def test_v1_list_endpoints_query_database(
 
 
 @pytest.mark.asyncio
+async def test_metrics_overview_returns_entity_counts(
+    api_client: AsyncClient,
+    seeded_ids: SeededIds,
+) -> None:
+    """GET /api/v1/metrics/overview should return correct counts for all entities."""
+    response = await api_client.get("/api/v1/metrics/overview")
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    # The seed fixture creates 2 of each entity type, except meetings (4).
+    assert payload == {
+        "meetings": 4,
+        "politicians": 2,
+        "parties": 2,
+        "motions": 2,
+        "votes": 2,
+        "documents": 2,
+        "amendments": 2,
+        "written_questions": 2,
+    }
+
+
+@pytest.mark.asyncio
 async def test_limit_offset_pagination_metadata(api_client: AsyncClient, seeded_ids: SeededIds) -> None:
     """List endpoints should support limit and offset pagination."""
     response = await api_client.get("/api/v1/institutions", params={"limit": "1", "offset": "1"})

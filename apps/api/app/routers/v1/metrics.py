@@ -3,17 +3,54 @@
 from datetime import date
 from uuid import UUID
 
-from curia_domain.db.models import MetricDefinitionRow, MetricResultRow
+from curia_domain.db.models import (
+    AmendmentRow,
+    DocumentRow,
+    MeetingRow,
+    MetricDefinitionRow,
+    MetricResultRow,
+    MotionRow,
+    PartyRow,
+    PoliticianRow,
+    VoteRow,
+    WrittenQuestionRow,
+)
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.dependencies import get_db
 from apps.api.app.routers.v1._utils import fetch_paginated
 from apps.api.app.schemas.common import PaginatedResponse
-from apps.api.app.schemas.responses import MetricDefinitionResponse, MetricResultResponse
+from apps.api.app.schemas.responses import (
+    MetricDefinitionResponse,
+    MetricResultResponse,
+    OverviewResponse,
+)
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+
+async def _count(db: AsyncSession, model: type) -> int:
+    result = await db.execute(select(func.count()).select_from(model))
+    return result.scalar_one()
+
+
+@router.get("/overview", response_model=OverviewResponse)
+async def get_overview(
+    db: AsyncSession = Depends(get_db),
+) -> OverviewResponse:
+    """Return high-level entity counts for the dashboard."""
+    return OverviewResponse(
+        meetings=await _count(db, MeetingRow),
+        politicians=await _count(db, PoliticianRow),
+        parties=await _count(db, PartyRow),
+        motions=await _count(db, MotionRow),
+        votes=await _count(db, VoteRow),
+        documents=await _count(db, DocumentRow),
+        amendments=await _count(db, AmendmentRow),
+        written_questions=await _count(db, WrittenQuestionRow),
+    )
 
 
 @router.get("/definitions", response_model=PaginatedResponse[MetricDefinitionResponse])

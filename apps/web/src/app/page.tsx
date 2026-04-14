@@ -1,64 +1,171 @@
-import Image from "next/image";
+import Link from "next/link";
 
-export default function Home() {
+import { fetchOverviewMetrics } from "@/lib/api";
+import type { OverviewMetrics } from "@/lib/types";
+
+/* ------------------------------------------------------------------ */
+/*  Stat card — shows a single metric count                           */
+/* ------------------------------------------------------------------ */
+
+function StatCard({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: number;
+  href?: string;
+}) {
+  const content = (
+    <div className="flex flex-col gap-1 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+      <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+        {label}
+      </span>
+      <span className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+        {value.toLocaleString("nl-NL")}
+      </span>
+    </div>
+  );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+  return content;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Section card — navigational link to a key section                 */
+/* ------------------------------------------------------------------ */
+
+function SectionCard({
+  title,
+  description,
+  href,
+}: {
+  title: string;
+  description: string;
+  href: string;
+}) {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <Link
+      href={href}
+      className="group flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+    >
+      <h3 className="text-lg font-semibold text-zinc-900 group-hover:text-blue-600 dark:text-zinc-50 dark:group-hover:text-blue-400">
+        {title}
+      </h3>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+    </Link>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Stats grid — renders all metrics or a fallback                    */
+/* ------------------------------------------------------------------ */
+
+function StatsGrid({ metrics }: { metrics: OverviewMetrics | null }) {
+  if (!metrics) {
+    return (
+      <p className="text-zinc-500 dark:text-zinc-400">
+        Unable to load statistics — the API may be unavailable.
+      </p>
+    );
+  }
+
+  const stats: { label: string; value: number; href?: string }[] = [
+    { label: "Meetings", value: metrics.meetings, href: "/meetings" },
+    {
+      label: "Politicians",
+      value: metrics.politicians,
+      href: "/politicians",
+    },
+    { label: "Parties", value: metrics.parties, href: "/parties" },
+    { label: "Motions", value: metrics.motions, href: "/motions" },
+    { label: "Votes", value: metrics.votes, href: "/votes" },
+    { label: "Documents", value: metrics.documents },
+    { label: "Amendments", value: metrics.amendments },
+    {
+      label: "Written questions",
+      value: metrics.written_questions,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      {stats.map((s) => (
+        <StatCard key={s.label} {...s} />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dashboard page (server component)                                 */
+/* ------------------------------------------------------------------ */
+
+export default async function DashboardPage() {
+  const metrics = await fetchOverviewMetrics();
+
+  return (
+    <div className="flex flex-1 flex-col bg-zinc-50 font-sans dark:bg-black">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Curia Dashboard
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-2 text-lg text-zinc-600 dark:text-zinc-400">
+            Overview of Dutch political data — meetings, politicians, votes and
+            more.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        {/* Statistics */}
+        <section className="mb-12">
+          <h2 className="mb-4 text-xl font-semibold text-zinc-800 dark:text-zinc-200">
+            Statistics
+          </h2>
+          <StatsGrid metrics={metrics} />
+        </section>
+
+        {/* Navigation cards */}
+        <section>
+          <h2 className="mb-4 text-xl font-semibold text-zinc-800 dark:text-zinc-200">
+            Explore
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SectionCard
+              title="Tweede Kamer"
+              description="Browse sessions, debates and votes of the Dutch House of Representatives."
+              href="/tweede-kamer"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+            <SectionCard
+              title="Municipalities"
+              description="Explore local council meetings, motions and decisions."
+              href="/municipalities"
+            />
+            <SectionCard
+              title="Parties"
+              description="View political parties and their representatives."
+              href="/parties"
+            />
+            <SectionCard
+              title="Politicians"
+              description="Search for politicians and view their activity."
+              href="/politicians"
+            />
+            <SectionCard
+              title="Motions"
+              description="Track proposed motions and their outcomes."
+              href="/motions"
+            />
+            <SectionCard
+              title="Votes"
+              description="Examine voting records and results."
+              href="/votes"
+            />
+          </div>
+        </section>
       </main>
     </div>
   );
