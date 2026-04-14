@@ -54,7 +54,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from curia_connectors_tweedekamer.odata_client import (
     Besluit,
-    DocumentActor,
     Fractie,
     FractieZetelPersoon,
     ODataClient,
@@ -510,11 +509,10 @@ class TweedeKamerConnector(SourceConnector):
         politician_map = politician_map or {}
 
         try:
-            zaken, zaak_actors, documents, doc_actors, dossiers = await asyncio.gather(
+            zaken, zaak_actors, documents, dossiers = await asyncio.gather(
                 client.list_zaak(),
                 client.list_zaakactor(),
                 client.list_document(),
-                client.list_documentactor(),
                 client.list_kamerstukdossier(),
             )
 
@@ -528,16 +526,35 @@ class TweedeKamerConnector(SourceConnector):
                 if actor.zaak_id is not None and not actor.verwijderd:
                     actors_by_zaak.setdefault(actor.zaak_id, []).append(actor)
 
-            doc_actors_by_doc: dict[uuid.UUID, list[DocumentActor]] = {}
-            for da in doc_actors:
-                if da.document_id is not None and not da.verwijderd:
-                    doc_actors_by_doc.setdefault(da.document_id, []).append(da)
+            # Collect incoming keys per entity type so we can scope DB
+            # lookups to only the records that may need dedup.
+            incoming_bill_ids: set[str] = set()
+            incoming_motion_titles: set[str] = set()
+            incoming_amendment_titles: set[str] = set()
+            for zaak in zaken:
+                if zaak.verwijderd or zaak.id is None:
+                    continue
+                soort = (zaak.soort or "").strip().lower()
+                entity_type = _ZAAK_SOORT_MAP.get(soort)
+                title = zaak.titel or zaak.onderwerp or zaak.citeertitel or f"Zaak {zaak.nummer or str(zaak.id)}"
+                if entity_type == "bill":
+                    incoming_bill_ids.add(str(zaak.id))
+                elif entity_type == "motion":
+                    incoming_motion_titles.add(title[:512])
+                elif entity_type == "amendment":
+                    incoming_amendment_titles.add(title[:512])
 
-            # Load existing rows for idempotent upserts
-            existing_bills = await self._load_existing_bills(session)
-            existing_motions = await self._load_existing_motions(session)
-            existing_amendments = await self._load_existing_amendments(session)
-            existing_documents = await self._load_existing_documents(session)
+            incoming_source_urls: set[str] = {
+                f"{_BASE_URL}/Document({doc.id})" for doc in documents if not doc.verwijderd and doc.id is not None
+            }
+
+            # Load only existing rows that may match the incoming batch
+            existing_bills = await self._load_existing_bills(session, incoming_ids=incoming_bill_ids)
+            existing_motions = await self._load_existing_motions(session, incoming_titles=incoming_motion_titles)
+            existing_amendments = await self._load_existing_amendments(
+                session, incoming_titles=incoming_amendment_titles
+            )
+            existing_documents = await self._load_existing_documents(session, incoming_source_urls=incoming_source_urls)
 
             # ----- Process Zaak records -----
             for zaak in zaken:
@@ -1143,25 +1160,69 @@ class TweedeKamerConnector(SourceConnector):
         return ids
 
     @staticmethod
-    async def _load_existing_bills(session: AsyncSession) -> dict[str, BillRow]:
-        """Load existing BillRow objects keyed by external_id."""
-        rows = (await session.execute(select(BillRow).where(BillRow.external_id.isnot(None)))).scalars().all()
+    async def _load_existing_bills(
+        session: AsyncSession,
+        *,
+        incoming_ids: set[str],
+    ) -> dict[str, BillRow]:
+        """Load existing BillRow objects keyed by external_id.
+
+        Only rows whose ``external_id`` is in *incoming_ids* are fetched
+        to keep DB I/O bounded.
+        """
+        if not incoming_ids:
+            return {}
+        rows = (await session.execute(select(BillRow).where(BillRow.external_id.in_(incoming_ids)))).scalars().all()
         return {row.external_id: row for row in rows if row.external_id is not None}
 
     @staticmethod
-    async def _load_existing_motions(session: AsyncSession) -> dict[str, MotionRow]:
-        """Load existing MotionRow objects keyed by title (used for dedup)."""
-        rows = (await session.execute(select(MotionRow))).scalars().all()
+    async def _load_existing_motions(
+        session: AsyncSession,
+        *,
+        incoming_titles: set[str],
+    ) -> dict[str, MotionRow]:
+        """Load existing MotionRow objects keyed by title (used for dedup).
+
+        Only rows whose ``title`` is in *incoming_titles* are fetched.
+        """
+        if not incoming_titles:
+            return {}
+        rows = (await session.execute(select(MotionRow).where(MotionRow.title.in_(incoming_titles)))).scalars().all()
         return {row.title: row for row in rows}
 
     @staticmethod
-    async def _load_existing_amendments(session: AsyncSession) -> dict[str, AmendmentRow]:
-        """Load existing AmendmentRow objects keyed by title (used for dedup)."""
-        rows = (await session.execute(select(AmendmentRow))).scalars().all()
+    async def _load_existing_amendments(
+        session: AsyncSession,
+        *,
+        incoming_titles: set[str],
+    ) -> dict[str, AmendmentRow]:
+        """Load existing AmendmentRow objects keyed by title (used for dedup).
+
+        Only rows whose ``title`` is in *incoming_titles* are fetched.
+        """
+        if not incoming_titles:
+            return {}
+        rows = (
+            (await session.execute(select(AmendmentRow).where(AmendmentRow.title.in_(incoming_titles)))).scalars().all()
+        )
         return {row.title: row for row in rows}
 
     @staticmethod
-    async def _load_existing_documents(session: AsyncSession) -> dict[str, DocumentRow]:
-        """Load existing DocumentRow objects keyed by source_url."""
-        rows = (await session.execute(select(DocumentRow).where(DocumentRow.source_url.isnot(None)))).scalars().all()
+    async def _load_existing_documents(
+        session: AsyncSession,
+        *,
+        incoming_source_urls: set[str],
+    ) -> dict[str, DocumentRow]:
+        """Load existing DocumentRow objects keyed by source_url.
+
+        Only rows whose ``source_url`` is in *incoming_source_urls* are
+        fetched.
+        """
+        if not incoming_source_urls:
+            return {}
+        rows = (
+            (await session.execute(select(DocumentRow).where(DocumentRow.source_url.in_(incoming_source_urls))))
+            .scalars()
+            .all()
+        )
         return {row.source_url: row for row in rows if row.source_url is not None}

@@ -112,7 +112,7 @@ async def async_session() -> AsyncIterator[AsyncSession]:
 
 
 def _build_odata_handler(request: httpx.Request) -> httpx.Response:
-    """Mock handler for OData requests returning Zaak, ZaakActor, Document, DocumentActor, Kamerstukdossier."""
+    """Mock handler for OData requests returning Zaak, ZaakActor, Document, Kamerstukdossier."""
     path = request.url.path
 
     if path == "/OData/v4/2.0/Zaak":
@@ -192,9 +192,6 @@ def _build_odata_handler(request: httpx.Request) -> httpx.Response:
             },
             request=request,
         )
-
-    if path == "/OData/v4/2.0/DocumentActor":
-        return httpx.Response(200, json={"value": []}, request=request)
 
     if path == "/OData/v4/2.0/Kamerstukdossier":
         return httpx.Response(
@@ -342,7 +339,6 @@ async def test_sync_bills_skips_deleted_zaken(
         if path in (
             "/OData/v4/2.0/ZaakActor",
             "/OData/v4/2.0/Document",
-            "/OData/v4/2.0/DocumentActor",
             "/OData/v4/2.0/Kamerstukdossier",
         ):
             return httpx.Response(200, json={"value": []}, request=request)
