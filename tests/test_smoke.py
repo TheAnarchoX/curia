@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from curia_domain import (
     BillCreate,
     BillResponse,
@@ -77,7 +79,7 @@ def test_national_domain_models_can_be_created() -> None:
     election = Election(
         name="Tweede Kamerverkiezing 2025",
         election_type=ElectionType.PARLIAMENTARY,
-        election_date="2025-10-29",
+        election_date=date(2025, 10, 29),
     )
     election_result = ElectionResult(
         election_id=election.id,
