@@ -8,6 +8,7 @@ from datetime import date as Date, datetime, timezone
 from pydantic import BaseModel, Field
 
 from curia_domain.enums import (
+    BillStatus,
     DecisionType,
     DocumentType,
     ExtractionStatus,
@@ -243,6 +244,35 @@ class Promise(BaseEntity):
     due_date: Date | None = None
     fulfilled_date: Date | None = None
     topic_tags: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Bills (legislative proposals)
+# ---------------------------------------------------------------------------
+
+
+class Bill(BaseEntity):
+    """A legislative proposal (wetsvoorstel) tracking its full lifecycle."""
+
+    external_id: str | None = None
+    title: str
+    summary: str | None = None
+    bill_type: str | None = None
+    status: BillStatus = BillStatus.INTRODUCED
+    introduced_date: Date | None = None
+    dossier_number: int | None = None
+    governing_body_id: uuid.UUID | None = None
+    proposer_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class BillStage(BaseEntity):
+    """A stage in the legislative lifecycle of a bill."""
+
+    bill_id: uuid.UUID
+    stage_name: str
+    stage_date: Date | None = None
+    notes: str | None = None
+    vote_id: uuid.UUID | None = None
 
 
 # ---------------------------------------------------------------------------
