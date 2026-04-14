@@ -32,11 +32,7 @@ async def list_politicians(
     if family_name is not None:
         stmt = stmt.where(PoliticianRow.family_name.ilike(f"%{family_name}%"))
     if party_id is not None:
-        stmt = stmt.where(
-            PoliticianRow.id.in_(
-                select(MandateRow.politician_id).where(MandateRow.party_id == party_id)
-            )
-        )
+        stmt = stmt.where(PoliticianRow.id.in_(select(MandateRow.politician_id).where(MandateRow.party_id == party_id)))
 
     return await fetch_paginated(db, stmt, PoliticianResponse, limit=limit, offset=offset)
 
