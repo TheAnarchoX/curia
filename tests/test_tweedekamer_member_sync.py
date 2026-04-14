@@ -189,7 +189,10 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport, base_url="https://example.test/OData/v4/2.0/") as http_client:
-        client = ODataClient(base_url="https://example.test/OData/v4/2.0/", http_client=http_client)
+        client = ODataClient(
+            base_url="https://example.test/OData/v4/2.0/",
+            http_client=http_client,
+        )
         connector = TweedeKamerConnector()
 
         first = await connector.sync_members_and_parties(
@@ -209,6 +212,7 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
         await async_session.commit()
 
     assert first.created == 6
+    assert first.existing == 0
     assert first.updated == 0
     assert first.skipped == 0
     assert first.fetched_people == 2
@@ -216,6 +220,7 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert first.fetched_memberships == 2
 
     assert second.created == 0
+    assert second.existing == 6
     assert second.updated == 6
     assert second.skipped == 0
 
@@ -228,12 +233,23 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert parties[0].active_from == date(2001, 1, 1)
     assert parties[1].active_until == date(2024, 12, 31)
 
-    politicians = (await async_session.execute(select(PoliticianRow).order_by(PoliticianRow.full_name))).scalars().all()
-    assert [politician.full_name for politician in politicians] == ["Myrthe Bikker", "Pieter van Vliet"]
+    politicians = (
+        await async_session.execute(
+            select(PoliticianRow).order_by(PoliticianRow.full_name),
+        )
+    ).scalars().all()
+    assert [politician.full_name for politician in politicians] == [
+        "Myrthe Bikker",
+        "Pieter van Vliet",
+    ]
     assert politicians[0].gender == "vrouw"
     assert politicians[1].notes == "Voormalig Kamerlid"
 
-    mandates = (await async_session.execute(select(MandateRow).order_by(MandateRow.start_date))).scalars().all()
+    mandates = (
+        await async_session.execute(
+            select(MandateRow).order_by(MandateRow.start_date),
+        )
+    ).scalars().all()
     assert len(mandates) == 2
     assert mandates[0].role == "member"
     assert mandates[0].start_date == date(2021, 3, 31)
@@ -242,3 +258,9 @@ async def test_sync_members_and_parties_persists_people_parties_and_memberships(
     assert mandates[1].start_date == date(2023, 12, 6)
     assert all(mandate.institution_id == INSTITUTION_ID for mandate in mandates)
     assert all(mandate.governing_body_id == GOVERNING_BODY_ID for mandate in mandates)
+
+
+def test_map_role_prefers_vice_chair_over_chair() -> None:
+    """Vice-chair titles should not be classified as chair roles."""
+    assert TweedeKamerConnector._map_role("vicevoorzitter") == "vice_chair"
+    assert TweedeKamerConnector._map_role("vice voorzitter") == "vice_chair"

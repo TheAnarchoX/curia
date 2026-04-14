@@ -67,11 +67,21 @@ class MemberPartySyncResult:
     """Outcome of syncing Tweede Kamer members, parties, and memberships."""
 
     created: int = 0
-    updated: int = 0
+    existing: int = 0
     skipped: int = 0
     fetched_people: int = 0
     fetched_parties: int = 0
     fetched_memberships: int = 0
+
+    @property
+    def updated(self) -> int:
+        """Backward-compatible alias for matched existing rows."""
+        return self.existing
+
+    @updated.setter
+    def updated(self, value: int) -> None:
+        """Backward-compatible alias for matched existing rows."""
+        self.existing = value
 
 
 class TweedeKamerConnector(SourceConnector):
@@ -155,26 +165,45 @@ class TweedeKamerConnector(SourceConnector):
 
             party_rows_by_id: dict[uuid.UUID, PartyRow] = {}
             politician_rows_by_id: dict[uuid.UUID, PoliticianRow] = {}
+            parties_by_name = await self._load_existing_parties(session, parties)
+            politicians_by_name = await self._load_existing_politicians(session, people)
 
             for party in parties:
-                created, party_row = await self._upsert_party(session, party)
+                created, party_row = await self._upsert_party(
+                    session,
+                    party,
+                    parties_by_name=parties_by_name,
+                )
                 if created is None or party_row is None:
                     result.skipped += 1
                     continue
                 result.created += int(created)
-                result.updated += int(not created)
+                result.existing += int(not created)
                 if party.id is not None:
                     party_rows_by_id[party.id] = party_row
 
             for person in people:
-                created, politician_row = await self._upsert_politician(session, person)
+                created, politician_row = await self._upsert_politician(
+                    session,
+                    person,
+                    politicians_by_name=politicians_by_name,
+                )
                 if created is None or politician_row is None:
                     result.skipped += 1
                     continue
                 result.created += int(created)
-                result.updated += int(not created)
+                result.existing += int(not created)
                 if person.id is not None:
                     politician_rows_by_id[person.id] = politician_row
+
+            await session.flush()
+            existing_mandates = await self._load_existing_mandates(
+                session,
+                party_rows_by_id=party_rows_by_id,
+                politician_rows_by_id=politician_rows_by_id,
+                institution_id=institution_id,
+                governing_body_id=governing_body_id,
+            )
 
             for seat in seats:
                 if seat.verwijderd or seat.fractie_id is None:
@@ -190,6 +219,7 @@ class TweedeKamerConnector(SourceConnector):
                         membership=membership,
                         party_row=membership_party_row,
                         politician_rows_by_id=politician_rows_by_id,
+                        existing_mandates=existing_mandates,
                         institution_id=institution_id,
                         governing_body_id=governing_body_id,
                     )
@@ -197,7 +227,7 @@ class TweedeKamerConnector(SourceConnector):
                         result.skipped += 1
                         continue
                     result.created += int(created)
-                    result.updated += int(not created)
+                    result.existing += int(not created)
 
             await session.flush()
             return result
@@ -266,12 +296,14 @@ class TweedeKamerConnector(SourceConnector):
     async def _upsert_party(
         session: AsyncSession,
         fractie: Fractie,
+        *,
+        parties_by_name: dict[str, PartyRow],
     ) -> tuple[bool | None, PartyRow | None]:
         party = TweedeKamerConnector._build_party(fractie)
         if party is None:
             return None, None
 
-        row = (await session.execute(select(PartyRow).where(PartyRow.name == party.name))).scalar_one_or_none()
+        row = parties_by_name.get(party.name)
         if row is None:
             row = PartyRow(
                 name=party.name,
@@ -281,6 +313,7 @@ class TweedeKamerConnector(SourceConnector):
                 active_until=party.active_until,
             )
             session.add(row)
+            parties_by_name[party.name] = row
             return True, row
 
         row.abbreviation = party.abbreviation
@@ -293,20 +326,14 @@ class TweedeKamerConnector(SourceConnector):
     async def _upsert_politician(
         session: AsyncSession,
         person: Persoon,
+        *,
+        politicians_by_name: dict[str, list[PoliticianRow]],
     ) -> tuple[bool | None, PoliticianRow | None]:
         politician = TweedeKamerConnector._build_politician(person)
         if politician is None:
             return None, None
 
-        candidates = (
-            (
-                await session.execute(
-                    select(PoliticianRow).where(PoliticianRow.full_name == politician.full_name),
-                )
-            )
-            .scalars()
-            .all()
-        )
+        candidates = politicians_by_name.get(politician.full_name, [])
 
         row = next(
             (candidate for candidate in candidates if candidate.date_of_birth == politician.date_of_birth),
@@ -330,6 +357,7 @@ class TweedeKamerConnector(SourceConnector):
                 notes=politician.notes,
             )
             session.add(row)
+            politicians_by_name.setdefault(politician.full_name, []).append(row)
             return True, row
 
         row.given_name = politician.given_name
@@ -347,6 +375,10 @@ class TweedeKamerConnector(SourceConnector):
         membership: FractieZetelPersoon,
         party_row: PartyRow,
         politician_rows_by_id: dict[uuid.UUID, PoliticianRow],
+        existing_mandates: dict[
+            tuple[uuid.UUID, uuid.UUID | None, uuid.UUID | None, uuid.UUID | None, str, date | None, date | None],
+            MandateRow,
+        ],
         institution_id: uuid.UUID,
         governing_body_id: uuid.UUID,
     ) -> bool | None:
@@ -367,31 +399,28 @@ class TweedeKamerConnector(SourceConnector):
         if mandate is None:
             return None
 
-        row = (
-            await session.execute(
-                select(MandateRow).where(
-                    MandateRow.politician_id == mandate.politician_id,
-                    MandateRow.party_id == mandate.party_id,
-                    MandateRow.institution_id == mandate.institution_id,
-                    MandateRow.governing_body_id == mandate.governing_body_id,
-                    MandateRow.role == mandate.role,
-                    MandateRow.start_date == mandate.start_date,
-                    MandateRow.end_date == mandate.end_date,
-                ),
-            )
-        ).scalar_one_or_none()
+        mandate_key = TweedeKamerConnector._mandate_key(
+            politician_id=mandate.politician_id,
+            party_id=mandate.party_id,
+            institution_id=mandate.institution_id,
+            governing_body_id=mandate.governing_body_id,
+            role=mandate.role,
+            start_date=mandate.start_date,
+            end_date=mandate.end_date,
+        )
+        row = existing_mandates.get(mandate_key)
         if row is None:
-            session.add(
-                MandateRow(
-                    politician_id=mandate.politician_id,
-                    party_id=mandate.party_id,
-                    institution_id=mandate.institution_id,
-                    governing_body_id=mandate.governing_body_id,
-                    role=mandate.role,
-                    start_date=mandate.start_date,
-                    end_date=mandate.end_date,
-                )
+            row = MandateRow(
+                politician_id=mandate.politician_id,
+                party_id=mandate.party_id,
+                institution_id=mandate.institution_id,
+                governing_body_id=mandate.governing_body_id,
+                role=mandate.role,
+                start_date=mandate.start_date,
+                end_date=mandate.end_date,
             )
+            session.add(row)
+            existing_mandates[mandate_key] = row
             return True
 
         return False
@@ -402,10 +431,10 @@ class TweedeKamerConnector(SourceConnector):
             return MandateRole.MEMBER
 
         normalised = value.strip().lower()
-        if "voorzitter" in normalised and "onder" not in normalised:
-            return MandateRole.CHAIR
         if "ondervoorzitter" in normalised or "vice" in normalised:
             return MandateRole.VICE_CHAIR
+        if "voorzitter" in normalised and "onder" not in normalised:
+            return MandateRole.CHAIR
         if "secretaris" in normalised:
             return MandateRole.SECRETARY
         return MandateRole.MEMBER
@@ -417,3 +446,110 @@ class TweedeKamerConnector(SourceConnector):
         if isinstance(value, datetime):
             return value.date()
         return value
+
+    @staticmethod
+    async def _load_existing_parties(
+        session: AsyncSession,
+        parties: list[Fractie],
+    ) -> dict[str, PartyRow]:
+        names = {
+            party.name
+            for party in (
+                TweedeKamerConnector._build_party(fractie)
+                for fractie in parties
+            )
+            if party is not None
+        }
+        if not names:
+            return {}
+
+        rows = (
+            await session.execute(select(PartyRow).where(PartyRow.name.in_(sorted(names))))
+        ).scalars().all()
+        return {row.name: row for row in rows}
+
+    @staticmethod
+    async def _load_existing_politicians(
+        session: AsyncSession,
+        people: list[Persoon],
+    ) -> dict[str, list[PoliticianRow]]:
+        full_names = {
+            politician.full_name
+            for politician in (
+                TweedeKamerConnector._build_politician(person)
+                for person in people
+            )
+            if politician is not None
+        }
+        if not full_names:
+            return {}
+
+        rows = (
+            await session.execute(
+                select(PoliticianRow).where(PoliticianRow.full_name.in_(sorted(full_names))),
+            )
+        ).scalars().all()
+        politicians_by_name: dict[str, list[PoliticianRow]] = {}
+        for row in rows:
+            politicians_by_name.setdefault(row.full_name, []).append(row)
+        return politicians_by_name
+
+    @staticmethod
+    async def _load_existing_mandates(
+        session: AsyncSession,
+        *,
+        party_rows_by_id: dict[uuid.UUID, PartyRow],
+        politician_rows_by_id: dict[uuid.UUID, PoliticianRow],
+        institution_id: uuid.UUID,
+        governing_body_id: uuid.UUID,
+    ) -> dict[
+        tuple[uuid.UUID, uuid.UUID | None, uuid.UUID | None, uuid.UUID | None, str, date | None, date | None],
+        MandateRow,
+    ]:
+        politician_ids = list(politician_rows_by_id.values())
+        if not politician_ids:
+            return {}
+
+        rows = (
+            await session.execute(
+                select(MandateRow).where(
+                    MandateRow.politician_id.in_([row.id for row in politician_ids]),
+                    MandateRow.institution_id == institution_id,
+                    MandateRow.governing_body_id == governing_body_id,
+                    MandateRow.party_id.in_([row.id for row in party_rows_by_id.values()]),
+                ),
+            )
+        ).scalars().all()
+        return {
+            TweedeKamerConnector._mandate_key(
+                politician_id=row.politician_id,
+                party_id=row.party_id,
+                institution_id=row.institution_id,
+                governing_body_id=row.governing_body_id,
+                role=row.role,
+                start_date=row.start_date,
+                end_date=row.end_date,
+            ): row
+            for row in rows
+        }
+
+    @staticmethod
+    def _mandate_key(
+        *,
+        politician_id: uuid.UUID,
+        party_id: uuid.UUID | None,
+        institution_id: uuid.UUID | None,
+        governing_body_id: uuid.UUID | None,
+        role: str,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> tuple[uuid.UUID, uuid.UUID | None, uuid.UUID | None, uuid.UUID | None, str, date | None, date | None]:
+        return (
+            politician_id,
+            party_id,
+            institution_id,
+            governing_body_id,
+            role,
+            start_date,
+            end_date,
+        )
