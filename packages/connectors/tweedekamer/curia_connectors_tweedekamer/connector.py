@@ -192,7 +192,7 @@ _STEMMING_SOORT_MAP: dict[str, str] = {
 
 
 # Mapping from Dutch Commissie.Soort values to GoverningBodyType.
-_COMMISSIE_SOORT_MAP: dict[str, str] = {
+_COMMISSIE_SOORT_MAP: dict[str, GoverningBodyType] = {
     "algemeen": GoverningBodyType.COMMITTEE,
     "bijzonder": GoverningBodyType.COMMITTEE,
     "vast": GoverningBodyType.COMMITTEE,
@@ -201,7 +201,7 @@ _COMMISSIE_SOORT_MAP: dict[str, str] = {
 }
 
 # Mapping from Dutch Activiteit.Status values to MeetingStatus.
-_ACTIVITEIT_STATUS_MAP: dict[str, str] = {
+_ACTIVITEIT_STATUS_MAP: dict[str, MeetingStatus] = {
     "gepland": MeetingStatus.SCHEDULED,
     "gereed": MeetingStatus.COMPLETED,
     "afgelast": MeetingStatus.CANCELLED,
@@ -761,7 +761,9 @@ class TweedeKamerConnector(SourceConnector):
                     result.skipped += 1
                     continue
 
-                name = commissie.naam_nl or commissie.afkorting or f"Commissie {commissie.nummer or str(commissie.id)}"
+                name = (
+                    commissie.naam_nl or commissie.afkorting or f"Commissie {commissie.nummer or str(commissie.id)}"
+                )[:255]
                 body_type = self._map_commissie_soort(commissie.soort)
 
                 existing = existing_committees.get(name)
@@ -1475,14 +1477,14 @@ class TweedeKamerConnector(SourceConnector):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _map_commissie_soort(soort: str | None) -> str:
+    def _map_commissie_soort(soort: str | None) -> GoverningBodyType:
         """Convert a Dutch Commissie.Soort value to a :class:`GoverningBodyType` value."""
         if soort is None:
             return GoverningBodyType.COMMITTEE
         return _COMMISSIE_SOORT_MAP.get(soort.strip().lower(), GoverningBodyType.COMMITTEE)
 
     @staticmethod
-    def _map_activiteit_status(status: str | None) -> str:
+    def _map_activiteit_status(status: str | None) -> MeetingStatus:
         """Convert a Dutch Activiteit.Status value to a :class:`MeetingStatus` value."""
         if status is None:
             return MeetingStatus.SCHEDULED
@@ -1494,11 +1496,16 @@ class TweedeKamerConnector(SourceConnector):
         *,
         institution_id: uuid.UUID,
     ) -> dict[str, GoverningBodyRow]:
-        """Load existing GoverningBodyRow objects for an institution, keyed by name."""
+        """Load existing committee GoverningBodyRow objects for an institution, keyed by name."""
         rows = (
             (
                 await session.execute(
-                    select(GoverningBodyRow).where(GoverningBodyRow.institution_id == institution_id),
+                    select(GoverningBodyRow).where(
+                        GoverningBodyRow.institution_id == institution_id,
+                        GoverningBodyRow.body_type.in_(
+                            [GoverningBodyType.COMMITTEE, GoverningBodyType.OTHER],
+                        ),
+                    ),
                 )
             )
             .scalars()
