@@ -244,7 +244,13 @@ function MeetingCard({ meeting }: { meeting: Meeting }) {
         {meeting.scheduled_start && (
           <span>{fmtTime(meeting.scheduled_start)}</span>
         )}
-        {meeting.location && <span>📍 {meeting.location}</span>}
+        {meeting.location && (
+          <span>
+            <span aria-hidden="true">📍 </span>
+            <span className="sr-only">Location: </span>
+            {meeting.location}
+          </span>
+        )}
       </div>
     </Link>
   );

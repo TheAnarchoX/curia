@@ -193,8 +193,12 @@ export async function fetchAgendaItems(
   meetingId: string,
 ): Promise<PaginatedResponse<AgendaItem> | null> {
   try {
+    const qs = new URLSearchParams({
+      meeting_id: meetingId,
+      limit: "100",
+    });
     const res = await fetch(
-      `${API_BASE_URL}/api/v1/agenda-items?meeting_id=${meetingId}&limit=100`,
+      `${API_BASE_URL}/api/v1/agenda-items?${qs.toString()}`,
       { next: { revalidate: 60 } },
     );
     if (!res.ok) return null;
@@ -211,8 +215,12 @@ export async function fetchDocuments(
   meetingId: string,
 ): Promise<PaginatedResponse<Document> | null> {
   try {
+    const qs = new URLSearchParams({
+      meeting_id: meetingId,
+      limit: "100",
+    });
     const res = await fetch(
-      `${API_BASE_URL}/api/v1/documents?meeting_id=${meetingId}&limit=100`,
+      `${API_BASE_URL}/api/v1/documents?${qs.toString()}`,
       { next: { revalidate: 60 } },
     );
     if (!res.ok) return null;
@@ -223,11 +231,12 @@ export async function fetchDocuments(
 }
 
 /**
- * Fetch votes linked to a meeting (via decision_id).
+ * Return an empty vote result for meeting detail pages.
  *
- * Since the votes API filters by decision_id and there is no direct
- * meeting_id filter, we just fetch a general page of recent votes.
- * The detail page shows a note when no votes are available.
+ * The current API exposes votes filtered by decision_id, but does not provide
+ * a direct meeting_id filter or a meeting-to-decision lookup endpoint. Until
+ * that exists, meeting pages render a placeholder and this helper returns a
+ * stable empty response.
  */
 export async function fetchVotesForMeeting(
   _meetingId: string,

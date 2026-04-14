@@ -134,9 +134,16 @@ function DocumentCard({ doc }: { doc: Document }) {
 
 function VoteCard({ vote }: { vote: Vote }) {
   const outcomeColour: Record<string, string> = {
-    passed: "text-green-700 dark:text-green-400",
+    adopted: "text-green-700 dark:text-green-400",
     rejected: "text-red-700 dark:text-red-400",
     tied: "text-yellow-700 dark:text-yellow-400",
+    not_voted: "text-zinc-700 dark:text-zinc-300",
+  };
+  const outcomeLabel: Record<string, string> = {
+    adopted: "Adopted",
+    rejected: "Rejected",
+    tied: "Tied",
+    not_voted: "Not voted",
   };
 
   return (
@@ -145,7 +152,7 @@ function VoteCard({ vote }: { vote: Vote }) {
         <span
           className={`text-sm font-semibold ${outcomeColour[vote.outcome ?? ""] ?? "text-zinc-700 dark:text-zinc-300"}`}
         >
-          {vote.outcome ?? "Unknown outcome"}
+          {outcomeLabel[vote.outcome ?? ""] ?? "Unknown outcome"}
         </span>
         {vote.date && (
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
