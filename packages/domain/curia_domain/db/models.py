@@ -417,7 +417,13 @@ class DecisionRow(TimestampMixin, Base):
 
     __table_args__ = (
         Index("ix_decisions_meeting_id", "meeting_id"),
-        Index("ix_decisions_external_id", "external_id"),
+        Index(
+            "ux_decisions_meeting_id_external_id",
+            "meeting_id",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
     )
 
 

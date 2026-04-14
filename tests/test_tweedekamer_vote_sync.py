@@ -26,10 +26,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Fixed UUIDs for test reproducibility
-INSTITUTION_ID = uuid.uuid4()
-GOVERNING_BODY_ID = uuid.uuid4()
-MEETING_ID = uuid.uuid4()
+# Deterministic UUIDs for test reproducibility
+INSTITUTION_ID = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+GOVERNING_BODY_ID = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+MEETING_ID = uuid.UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 PERSON_1_ID = "97dd70f0-a4e0-42fa-98c4-7f44bbf5f46c"
 PERSON_2_ID = "8ef86d15-bbd2-4d50-8450-2669e0f50a20"

@@ -275,6 +275,7 @@ class TweedeKamerConnector(SourceConnector):
         meeting_id: uuid.UUID,
         politician_map: dict[uuid.UUID, PoliticianRow],
         party_map: dict[uuid.UUID, PartyRow],
+        besluit_ids: list[uuid.UUID] | None = None,
         odata_client: ODataClient | None = None,
     ) -> VoteSyncResult:
         """Fetch Tweede Kamer voting records and persist them.
@@ -292,6 +293,12 @@ class TweedeKamerConnector(SourceConnector):
         party_map:
             Mapping from OData ``Fractie.Id`` to the corresponding
             :class:`PartyRow`.
+        besluit_ids:
+            Optional list of OData Besluit UUIDs to scope the sync to.
+            When provided, only Besluit and Stemming records matching
+            these IDs are fetched via an OData ``$filter``.  When
+            *None*, **all** records are fetched (use with caution on
+            large datasets).
         odata_client:
             Optional shared OData client.  If *None*, a new client is
             created and closed at the end of the call.
@@ -301,9 +308,19 @@ class TweedeKamerConnector(SourceConnector):
         result = VoteSyncResult()
 
         try:
+            besluit_filter: str | None = None
+            stemming_filter: str | None = None
+            if besluit_ids:
+                ids_clause = ",".join(str(bid) for bid in besluit_ids)
+                besluit_filter = f"Id in ({ids_clause})"
+                stemming_filter = f"Besluit_Id in ({ids_clause})"
+
             besluiten, stemmingen = await asyncio.gather(
-                client.list_besluit(),
-                client.list_stemming(expand=["StemmingsSoort"]),
+                client.list_besluit(filter=besluit_filter),
+                client.list_stemming(
+                    expand=["StemmingsSoort"],
+                    filter=stemming_filter,
+                ),
             )
 
             result.fetched_besluiten = len(besluiten)
@@ -370,7 +387,8 @@ class TweedeKamerConnector(SourceConnector):
                     result.votes_created += 1
 
                 # ----- VoteRecords (per-faction / per-member) -----
-                existing_records = await self._load_existing_vote_records(session, vote_id=vote_row.id)
+                incoming_ids = {str(s.id) for s in besluit_stemmingen if s.id is not None}
+                existing_records = await self._load_existing_vote_records(session, incoming_external_ids=incoming_ids)
 
                 for stemming in besluit_stemmingen:
                     if stemming.id is None:
@@ -384,13 +402,20 @@ class TweedeKamerConnector(SourceConnector):
                     value = self._map_stemming_soort(stemming.soort)
                     politician_row = politician_map.get(stemming.persoon_id) if stemming.persoon_id else None
                     party_row = party_map.get(stemming.fractie_id) if stemming.fractie_id else None
+                    size = (
+                        stemming.fractie_grootte
+                        if stemming.fractie_grootte is not None
+                        else 1
+                        if stemming.persoon_id is not None
+                        else 0
+                    )
 
                     record_row = VoteRecordRow(
                         vote_id=vote_row.id,
                         politician_id=politician_row.id if politician_row else None,
                         party_id=party_row.id if party_row else None,
                         value=value,
-                        party_size=stemming.fractie_grootte,
+                        party_size=size,
                         is_mistake=bool(stemming.vergissing),
                         external_id=odata_id,
                     )
@@ -827,8 +852,20 @@ class TweedeKamerConnector(SourceConnector):
     async def _load_existing_vote_records(
         session: AsyncSession,
         *,
-        vote_id: uuid.UUID,
+        incoming_external_ids: set[str],
     ) -> dict[str, VoteRecordRow]:
-        """Load existing VoteRecordRow objects keyed by external_id."""
-        rows = (await session.execute(select(VoteRecordRow).where(VoteRecordRow.vote_id == vote_id))).scalars().all()
+        """Load existing VoteRecordRow objects keyed by external_id.
+
+        ``VoteRecordRow.external_id`` is globally unique, so we look up by
+        the set of incoming external IDs rather than scoping to a single
+        vote to detect records that may have been synced under a different
+        vote.
+        """
+        if not incoming_external_ids:
+            return {}
+        rows = (
+            (await session.execute(select(VoteRecordRow).where(VoteRecordRow.external_id.in_(incoming_external_ids))))
+            .scalars()
+            .all()
+        )
         return {row.external_id: row for row in rows if row.external_id is not None}
