@@ -88,8 +88,10 @@ def test_national_domain_models_can_be_created() -> None:
     )
 
     assert bill_create.bill_type is BillType.GOVERNMENT
+    assert "id" not in bill_create.model_dump()
     assert bill_response.status.value == "introduced"
     assert bill_stage_create.stage_name == "introduced"
+    assert "id" not in bill_stage_create.model_dump()
     assert bill_stage_response.bill_id == bill_response.id
     assert election.election_type is ElectionType.PARLIAMENTARY
     assert election_result.seats == 10

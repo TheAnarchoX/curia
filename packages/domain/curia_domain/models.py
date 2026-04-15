@@ -254,7 +254,11 @@ class Promise(BaseEntity):
 
 
 class BillCreate(BaseModel):
-    """Payload for creating a legislative bill."""
+    """Payload for creating a legislative bill.
+
+    Create payloads do not include server-generated fields such as ``id``,
+    ``created_at``, or ``updated_at``.
+    """
 
     external_id: str | None = None
     title: str
@@ -286,7 +290,11 @@ class BillResponse(Bill):
 
 
 class BillStageCreate(BaseModel):
-    """Payload for creating a bill lifecycle stage."""
+    """Payload for creating a bill lifecycle stage.
+
+    Create payloads do not include server-generated fields such as ``id``,
+    ``created_at``, or ``updated_at``.
+    """
 
     bill_id: uuid.UUID
     stage_name: str
