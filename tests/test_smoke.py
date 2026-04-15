@@ -2,8 +2,28 @@
 
 from __future__ import annotations
 
-from curia_domain.enums import GoverningBodyType, InstitutionType, JurisdictionLevel, MeetingStatus
-from curia_domain.models import GoverningBody, Institution, Jurisdiction, Meeting, Party, Politician
+from datetime import date
+
+from curia_domain import (
+    BillCreate,
+    BillResponse,
+    BillStageCreate,
+    BillStageResponse,
+    BillType,
+    Election,
+    ElectionResult,
+    ElectionType,
+    GoverningBody,
+    GoverningBodyType,
+    Institution,
+    InstitutionType,
+    Jurisdiction,
+    JurisdictionLevel,
+    Meeting,
+    MeetingStatus,
+    Party,
+    Politician,
+)
 from curia_ingestion.interfaces import SourceConnector
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
@@ -36,6 +56,45 @@ def test_domain_models_can_be_created() -> None:
     assert meeting.status is MeetingStatus.SCHEDULED
     assert party.aliases == []
     assert politician.full_name == "Jane Doe"
+
+
+def test_national_domain_models_can_be_created() -> None:
+    """National-level bill and election models should build with valid data."""
+    bill_create = BillCreate(
+        title="Wet open overheid",
+        bill_type=BillType.GOVERNMENT,
+    )
+    bill_response = BillResponse(
+        title="Wet open overheid",
+        bill_type=BillType.GOVERNMENT,
+    )
+    bill_stage_create = BillStageCreate(
+        bill_id=bill_response.id,
+        stage_name="introduced",
+    )
+    bill_stage_response = BillStageResponse(
+        bill_id=bill_response.id,
+        stage_name="introduced",
+    )
+    election = Election(
+        name="Tweede Kamerverkiezing 2025",
+        election_type=ElectionType.PARLIAMENTARY,
+        election_date=date(2025, 10, 29),
+    )
+    election_result = ElectionResult(
+        election_id=election.id,
+        votes=12345,
+        seats=10,
+    )
+
+    assert bill_create.bill_type is BillType.GOVERNMENT
+    assert "id" not in bill_create.model_dump()
+    assert bill_response.status.value == "introduced"
+    assert bill_stage_create.stage_name == "introduced"
+    assert "id" not in bill_stage_create.model_dump()
+    assert bill_stage_response.bill_id == bill_response.id
+    assert election.election_type is ElectionType.PARLIAMENTARY
+    assert election_result.seats == 10
 
 
 def test_create_app_builds_fastapi_application(api_app: FastAPI) -> None:

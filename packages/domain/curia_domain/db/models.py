@@ -449,6 +449,10 @@ class BillStageRow(TimestampMixin, Base):
     )
 
 
+Bill = BillRow
+BillStage = BillStageRow
+
+
 # ---------------------------------------------------------------------------
 # Decisions & votes
 # ---------------------------------------------------------------------------

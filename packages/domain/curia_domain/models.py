@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field
 
 from curia_domain.enums import (
     BillStatus,
+    BillType,
     DecisionType,
     DocumentType,
+    ElectionType,
     ExtractionStatus,
     GoverningBodyType,
     IdentityMatchType,
@@ -251,18 +253,54 @@ class Promise(BaseEntity):
 # ---------------------------------------------------------------------------
 
 
+class BillCreate(BaseModel):
+    """Payload for creating a legislative bill.
+
+    Create payloads do not include server-generated fields such as ``id``,
+    ``created_at``, or ``updated_at``.
+    """
+
+    external_id: str | None = None
+    title: str
+    summary: str | None = None
+    bill_type: BillType | None = None
+    status: BillStatus = BillStatus.INTRODUCED
+    introduced_date: Date | None = None
+    dossier_number: int | None = None
+    governing_body_id: uuid.UUID | None = None
+    proposer_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 class Bill(BaseEntity):
     """A legislative proposal (wetsvoorstel) tracking its full lifecycle."""
 
     external_id: str | None = None
     title: str
     summary: str | None = None
-    bill_type: str | None = None
+    bill_type: BillType | None = None
     status: BillStatus = BillStatus.INTRODUCED
     introduced_date: Date | None = None
     dossier_number: int | None = None
     governing_body_id: uuid.UUID | None = None
     proposer_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class BillResponse(Bill):
+    """Response schema for a legislative bill."""
+
+
+class BillStageCreate(BaseModel):
+    """Payload for creating a bill lifecycle stage.
+
+    Create payloads do not include server-generated fields such as ``id``,
+    ``created_at``, or ``updated_at``.
+    """
+
+    bill_id: uuid.UUID
+    stage_name: str
+    stage_date: Date | None = None
+    notes: str | None = None
+    vote_id: uuid.UUID | None = None
 
 
 class BillStage(BaseEntity):
@@ -273,6 +311,38 @@ class BillStage(BaseEntity):
     stage_date: Date | None = None
     notes: str | None = None
     vote_id: uuid.UUID | None = None
+
+
+class BillStageResponse(BillStage):
+    """Response schema for a bill lifecycle stage."""
+
+
+# ---------------------------------------------------------------------------
+# Elections
+# ---------------------------------------------------------------------------
+
+
+class Election(BaseEntity):
+    """An election event."""
+
+    name: str
+    election_type: ElectionType
+    election_date: Date
+    jurisdiction_id: uuid.UUID | None = None
+    institution_id: uuid.UUID | None = None
+    source_id: uuid.UUID | None = None
+
+
+class ElectionResult(BaseEntity):
+    """An election result for a party or candidate."""
+
+    election_id: uuid.UUID
+    party_id: uuid.UUID | None = None
+    politician_id: uuid.UUID | None = None
+    region: str | None = None
+    votes: int | None = None
+    seats: int | None = None
+    percentage: float | None = None
 
 
 # ---------------------------------------------------------------------------
